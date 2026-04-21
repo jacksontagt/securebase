@@ -1,0 +1,8 @@
+[package]
+name = "securebase-data"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "securebase-data"
+path = "src/main.rs"

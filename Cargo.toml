@@ -1,0 +1,36 @@
+[workspace]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+members = [
+    # shared
+    "crates/securebase-core",
+    "crates/securebase-db",
+    "crates/securebase-proto",
+    # acl stack
+    "crates/acl-model",
+    "crates/acl-engine",
+    "crates/acl-store",
+    "crates/acl-api",
+    # services
+    "crates/auth-core",
+    "crates/auth-api",
+    "crates/data-api",
+    # binaries
+    "bins/securebase-acl",
+    "bins/securebase-auth",
+    "bins/securebase-data",
+]
+
+[workspace.dependencies]
+securebase-core  = { path = "crates/securebase-core" }
+securebase-db    = { path = "crates/securebase-db" }
+securebase-proto = { path = "crates/securebase-proto" }
+acl-model        = { path = "crates/acl-model" }
+acl-engine       = { path = "crates/acl-engine" }
+acl-store        = { path = "crates/acl-store" }
+acl-api          = { path = "crates/acl-api" }
+auth-core        = { path = "crates/auth-core" }
+auth-api         = { path = "crates/auth-api" }
+data-api         = { path = "crates/data-api" }
