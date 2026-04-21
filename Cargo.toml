@@ -34,3 +34,5 @@ acl-api          = { path = "crates/acl-api" }
 auth-core        = { path = "crates/auth-core" }
 auth-api         = { path = "crates/auth-api" }
 data-api         = { path = "crates/data-api" }
+
+sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "migrate", "macros", "uuid", "time"] }
