@@ -1,8 +1,5 @@
 [workspace]
 resolver = "2"
-
-[workspace.package]
-edition = "2021"
 members = [
     # shared
     "crates/securebase-core",
@@ -22,6 +19,9 @@ members = [
     "bins/securebase-auth",
     "bins/securebase-data",
 ]
+
+[workspace.package]
+edition = "2021"
 
 [workspace.dependencies]
 securebase-core  = { path = "crates/securebase-core" }
