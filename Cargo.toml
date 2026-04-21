@@ -14,10 +14,12 @@ members = [
     "crates/auth-core",
     "crates/auth-api",
     "crates/data-api",
+    "crates/storage-api",
     # binaries
     "bins/securebase-acl",
     "bins/securebase-auth",
     "bins/securebase-data",
+    "bins/securebase-storage",
 ]
 
 [workspace.package]
@@ -34,3 +36,4 @@ acl-api          = { path = "crates/acl-api" }
 auth-core        = { path = "crates/auth-core" }
 auth-api         = { path = "crates/auth-api" }
 data-api         = { path = "crates/data-api" }
+storage-api      = { path = "crates/storage-api" }
