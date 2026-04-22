@@ -10,8 +10,8 @@ $$;
 
 GRANT USAGE ON SCHEMA acl TO acl_service;
 
--- placeholder table; replaced by acl.tuples in task 2.4
-CREATE TABLE acl.schemas (
+-- placeholder table; replaced by acl.tuples later
+CREATE TABLE IF NOT EXISTS acl.schemas (
     id      SERIAL PRIMARY KEY,
     name    TEXT NOT NULL UNIQUE,
     body    TEXT NOT NULL,

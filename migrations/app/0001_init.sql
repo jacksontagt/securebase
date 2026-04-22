@@ -13,8 +13,8 @@ $$;
 
 GRANT USAGE ON SCHEMA app TO data_service, storage_service;
 
--- placeholder table; replaced by real tables in task 3.x
-CREATE TABLE app.documents (
+-- placeholder table; replaced by real tables later
+CREATE TABLE IF NOT EXISTS app.documents (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     owner      TEXT        NOT NULL,
     title      TEXT        NOT NULL,
