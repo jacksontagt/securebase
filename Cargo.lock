@@ -88,6 +88,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "securebase-storage"
+version = "0.1.0"
+
+[[package]]
 name = "serde"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -128,6 +132,10 @@ dependencies = [
  "serde_core",
  "zmij",
 ]
+
+[[package]]
+name = "storage-api"
+version = "0.1.0"
 
 [[package]]
 name = "syn"
