@@ -1,0 +1,8 @@
+[package]
+name = "securebase-storage"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "securebase-storage"
+path = "src/main.rs"
