@@ -70,9 +70,9 @@ pub enum SchemaError {
 }
 
 pub fn parse_schema(input: &str) -> Result<Schema, Vec<SchemaError>> {
-    let (output, errors) = parser::parse(input);
-    if !errors.is_empty() {
-        return Err(errors);
+    let (output, parse_errors) = parser::parse(input);
+    if !parse_errors.is_empty() {
+        return Err(parse_errors);
     }
     let mut types = HashMap::new();
     for raw in output.unwrap_or_default() {
@@ -81,6 +81,10 @@ pub fn parse_schema(input: &str) -> Result<Schema, Vec<SchemaError>> {
             relations.insert(name, rewrite);
         }
         types.insert(raw.name.clone(), TypeDef { name: raw.name, relations });
+    }
+    let validation_errors = validator::validate(&types);
+    if !validation_errors.is_empty() {
+        return Err(validation_errors);
     }
     Ok(Schema::new(types))
 }
@@ -211,7 +215,7 @@ mod tests {
     #[test]
     fn parse_union_two() {
         let schema = parse_schema(
-            "type doc\n  relations\n    define viewer: [user] or editor",
+            "type doc\n  relations\n    define editor: [user]\n    define viewer: [user] or editor",
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
@@ -225,7 +229,7 @@ mod tests {
     fn parse_union_flattened() {
         // A or B or C → Union([A, B, C]), not Union([Union([A, B]), C])
         let schema = parse_schema(
-            "type doc\n  relations\n    define viewer: [user] or editor or viewer from parent",
+            "type doc\n  relations\n    define parent: [folder]\n    define editor: [user]\n    define viewer: [user] or editor or viewer from parent",
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
@@ -239,7 +243,7 @@ mod tests {
     #[test]
     fn parse_intersection() {
         let schema = parse_schema(
-            "type doc\n  relations\n    define viewer: [user] and member",
+            "type doc\n  relations\n    define member: [user]\n    define viewer: [user] and member",
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
@@ -250,7 +254,7 @@ mod tests {
     #[test]
     fn parse_exclusion() {
         let schema = parse_schema(
-            "type doc\n  relations\n    define viewer: [user] but not blocked",
+            "type doc\n  relations\n    define blocked: [user]\n    define viewer: [user] but not blocked",
         )
         .unwrap();
         assert!(matches!(
@@ -263,7 +267,7 @@ mod tests {
     fn parse_parentheses_grouping() {
         // ([user] or editor) and member → Intersection([Union([This, CU(editor)]), CU(member)])
         let schema = parse_schema(
-            "type doc\n  relations\n    define viewer: ([user] or editor) and member",
+            "type doc\n  relations\n    define editor: [user]\n    define member: [user]\n    define viewer: ([user] or editor) and member",
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
@@ -319,5 +323,100 @@ type document
 
         // unknown relation returns None
         assert!(schema.get_rewrite("document", "nonexistent").is_none());
+    }
+
+    // --- Step 4: semantic validation ---
+
+    #[test]
+    fn validate_undefined_computed_userset() {
+        let result = parse_schema(
+            "type doc\n  relations\n    define viewer: nonexistent",
+        );
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert_eq!(errs.len(), 1);
+        let SchemaError::UndefinedRelation { type_name, relation, referenced_from } = &errs[0]
+        else { panic!("expected UndefinedRelation") };
+        assert_eq!(type_name, "doc");
+        assert_eq!(relation, "nonexistent");
+        assert_eq!(referenced_from, "viewer");
+    }
+
+    #[test]
+    fn validate_undefined_tupleset() {
+        let result = parse_schema(
+            "type doc\n  relations\n    define viewer: viewer from ghost",
+        );
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert!(errs.iter().any(|e| matches!(e,
+            SchemaError::UndefinedRelation { relation, .. } if relation == "ghost"
+        )));
+    }
+
+    #[test]
+    fn validate_undefined_ttu_computed() {
+        let result = parse_schema(
+            "type doc\n  relations\n    define parent: [folder]\n    define viewer: missing from parent",
+        );
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert!(errs.iter().any(|e| matches!(e,
+            SchemaError::UndefinedRelation { relation, .. } if relation == "missing"
+        )));
+    }
+
+    #[test]
+    fn validate_accumulates_multiple_errors() {
+        let result = parse_schema(
+            "type doc\n  relations\n    define a: ghost1\n    define b: ghost2",
+        );
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().len(), 2);
+    }
+
+    #[test]
+    fn validate_undefined_inside_union() {
+        let result = parse_schema(
+            "type doc\n  relations\n    define viewer: [user] or ghost",
+        );
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert!(errs.iter().any(|e| matches!(e,
+            SchemaError::UndefinedRelation { relation, .. } if relation == "ghost"
+        )));
+    }
+
+    #[test]
+    fn validate_valid_schema_passes() {
+        let result = parse_schema(
+            "type doc\n  relations\n    define owner: [user]\n    define viewer: owner",
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_full_demo_schema_passes() {
+        let schema_text = "\
+type user
+
+type group
+  relations
+    define member: [user, group#member]
+
+type folder
+  relations
+    define owner: [user]
+    define editor: [user] or owner
+    define viewer: [user] or editor
+
+type document
+  relations
+    define parent: [folder]
+    define owner: [user]
+    define editor: [user] or owner or editor from parent
+    define viewer: [user] or editor or viewer from parent
+";
+        assert!(parse_schema(schema_text).is_ok());
     }
 }
