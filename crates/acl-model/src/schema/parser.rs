@@ -23,7 +23,35 @@ pub(super) fn parse(input: &str) -> (Option<Vec<RawTypeDef>>, Vec<SchemaError>) 
     (output, schema_errors)
 }
 
-// Matches an identifier that equals `word`, fails (with backtrack) otherwise.
+#[derive(Clone, Copy)]
+enum BinOp {
+    Or,
+    And,
+    ButNot,
+}
+
+// Flatten same-operator chains: A or B or C → Union([A, B, C]), not Union([Union([A, B]), C]).
+fn merge(lhs: Rewrite, op: BinOp, rhs: Rewrite) -> Rewrite {
+    match op {
+        BinOp::Or => match lhs {
+            Rewrite::Union(mut v) => {
+                v.push(rhs);
+                Rewrite::Union(v)
+            }
+            other => Rewrite::Union(vec![other, rhs]),
+        },
+        BinOp::And => match lhs {
+            Rewrite::Intersection(mut v) => {
+                v.push(rhs);
+                Rewrite::Intersection(v)
+            }
+            other => Rewrite::Intersection(vec![other, rhs]),
+        },
+        BinOp::ButNot => Rewrite::Exclusion(Box::new(lhs), Box::new(rhs)),
+    }
+}
+
+// Matches an identifier that equals `word`; backtracks via try_map if it doesn't.
 fn kw<'a>(word: &'static str) -> impl Parser<'a, &'a str, (), Err<'a>> + Clone {
     text::ascii::ident()
         .try_map(move |s: &str, span| {
@@ -41,7 +69,7 @@ fn ident_str<'a>() -> impl Parser<'a, &'a str, String, Err<'a>> + Clone {
 }
 
 // Parses one entry inside a bracket list: `user`, `user:*`, or `group#member`.
-fn type_ref_parser<'a>() -> impl Parser<'a, &'a str, TypeRef, Err<'a>> {
+fn type_ref_parser<'a>() -> impl Parser<'a, &'a str, TypeRef, Err<'a>> + Clone {
     let base = text::ascii::ident().map(|s: &str| s.to_string());
 
     let suffix = choice((
@@ -59,7 +87,7 @@ fn type_ref_parser<'a>() -> impl Parser<'a, &'a str, TypeRef, Err<'a>> {
 }
 
 // Parses `[user]`, `[user, group#member]`, etc. → Rewrite::This.
-fn type_restriction_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> {
+fn type_restriction_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> + Clone {
     just('[')
         .padded()
         .ignore_then(
@@ -72,10 +100,10 @@ fn type_restriction_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> {
         .map(|allowed| Rewrite::This { allowed })
 }
 
-// Parses a bare identifier or `ident from ident`.
-// Handles both ComputedUserset and TupleToUserset in one pass to avoid
-// backtracking after consuming the leading ident.
-fn ident_rewrite_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> {
+// Parses a bare identifier or `ident from ident`, handling both
+// ComputedUserset and TupleToUserset in one pass to avoid backtracking
+// after consuming the leading ident.
+fn ident_rewrite_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> + Clone {
     let reserved = |s: &str| {
         matches!(
             s,
@@ -99,16 +127,38 @@ fn ident_rewrite_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> {
         })
 }
 
-// Step 2: atoms only. Extended with binary operators in Step 3.
-fn rewrite_term_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> {
-    choice((type_restriction_parser(), ident_rewrite_parser()))
+// Full recursive expression parser: handles atoms plus or/and/but-not chains
+// and parenthesised grouping.
+fn rewrite_expr_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> {
+    recursive(|expr| {
+        let atom = choice((
+            type_restriction_parser(),
+            expr.clone()
+                .delimited_by(just('(').padded(), just(')').padded()),
+            ident_rewrite_parser(),
+        ));
+
+        let op = choice((
+            kw("or").to(BinOp::Or),
+            kw("and").to(BinOp::And),
+            kw("but").then_ignore(kw("not")).to(BinOp::ButNot),
+        ));
+
+        // Collect (op, rhs) pairs and fold left so that A or B or C
+        // produces Union([A, B, C]) rather than Union([Union([A, B]), C]).
+        atom.clone()
+            .then(op.then(atom).repeated().collect::<Vec<_>>())
+            .map(|(first, rest)| {
+                rest.into_iter().fold(first, |lhs, (op, rhs)| merge(lhs, op, rhs))
+            })
+    })
 }
 
 fn relation_def_parser<'a>() -> impl Parser<'a, &'a str, (String, Rewrite), Err<'a>> {
     kw("define")
         .ignore_then(ident_str())
         .then_ignore(just(':').padded())
-        .then(rewrite_term_parser())
+        .then(rewrite_expr_parser())
 }
 
 fn type_body_parser<'a>() -> impl Parser<'a, &'a str, Vec<(String, Rewrite)>, Err<'a>> {

@@ -205,4 +205,119 @@ mod tests {
         assert!(!errs.is_empty());
         assert!(matches!(errs[0], SchemaError::Parse { .. }));
     }
+
+    // --- Step 3: composite rewrites ---
+
+    #[test]
+    fn parse_union_two() {
+        let schema = parse_schema(
+            "type doc\n  relations\n    define viewer: [user] or editor",
+        )
+        .unwrap();
+        let r = schema.get_rewrite("doc", "viewer").unwrap();
+        let Rewrite::Union(v) = r else { panic!("expected Union, got {r:?}") };
+        assert_eq!(v.len(), 2);
+        assert!(matches!(v[0], Rewrite::This { .. }));
+        assert!(matches!(&v[1], Rewrite::ComputedUserset { relation } if relation == "editor"));
+    }
+
+    #[test]
+    fn parse_union_flattened() {
+        // A or B or C → Union([A, B, C]), not Union([Union([A, B]), C])
+        let schema = parse_schema(
+            "type doc\n  relations\n    define viewer: [user] or editor or viewer from parent",
+        )
+        .unwrap();
+        let r = schema.get_rewrite("doc", "viewer").unwrap();
+        let Rewrite::Union(v) = r else { panic!("expected Union, got {r:?}") };
+        assert_eq!(v.len(), 3);
+        assert!(matches!(v[0], Rewrite::This { .. }));
+        assert!(matches!(&v[1], Rewrite::ComputedUserset { relation } if relation == "editor"));
+        assert!(matches!(&v[2], Rewrite::TupleToUserset { tupleset, computed } if tupleset == "parent" && computed == "viewer"));
+    }
+
+    #[test]
+    fn parse_intersection() {
+        let schema = parse_schema(
+            "type doc\n  relations\n    define viewer: [user] and member",
+        )
+        .unwrap();
+        let r = schema.get_rewrite("doc", "viewer").unwrap();
+        let Rewrite::Intersection(v) = r else { panic!("expected Intersection, got {r:?}") };
+        assert_eq!(v.len(), 2);
+    }
+
+    #[test]
+    fn parse_exclusion() {
+        let schema = parse_schema(
+            "type doc\n  relations\n    define viewer: [user] but not blocked",
+        )
+        .unwrap();
+        assert!(matches!(
+            schema.get_rewrite("doc", "viewer"),
+            Some(Rewrite::Exclusion(_, _))
+        ));
+    }
+
+    #[test]
+    fn parse_parentheses_grouping() {
+        // ([user] or editor) and member → Intersection([Union([This, CU(editor)]), CU(member)])
+        let schema = parse_schema(
+            "type doc\n  relations\n    define viewer: ([user] or editor) and member",
+        )
+        .unwrap();
+        let r = schema.get_rewrite("doc", "viewer").unwrap();
+        let Rewrite::Intersection(v) = r else { panic!("expected Intersection, got {r:?}") };
+        assert_eq!(v.len(), 2);
+        assert!(matches!(&v[0], Rewrite::Union(inner) if inner.len() == 2));
+        assert!(matches!(&v[1], Rewrite::ComputedUserset { relation } if relation == "member"));
+    }
+
+    #[test]
+    fn parse_full_demo_schema() {
+        let schema_text = "\
+type user
+
+type group
+  relations
+    define member: [user, group#member]
+
+type folder
+  relations
+    define owner: [user]
+    define editor: [user] or owner
+    define viewer: [user] or editor
+
+type document
+  relations
+    define parent: [folder]
+    define owner: [user]
+    define editor: [user] or owner or editor from parent
+    define viewer: [user] or editor or viewer from parent
+";
+        let schema = parse_schema(schema_text).unwrap();
+
+        assert!(schema.has_type("user"));
+        assert!(schema.has_type("group"));
+        assert!(schema.has_type("folder"));
+        assert!(schema.has_type("document"));
+
+        // document#viewer is a flat Union with 3 members
+        let viewer = schema.get_rewrite("document", "viewer").unwrap();
+        let Rewrite::Union(v) = viewer else { panic!("expected Union") };
+        assert_eq!(v.len(), 3, "document#viewer should be Union([This, CU(editor), TTU])");
+
+        // document#editor is also Union with 3 members
+        let editor = schema.get_rewrite("document", "editor").unwrap();
+        let Rewrite::Union(ev) = editor else { panic!("expected Union") };
+        assert_eq!(ev.len(), 3);
+
+        // group#member is This (direct with two type restrictions)
+        let member = schema.get_rewrite("group", "member").unwrap();
+        let Rewrite::This { allowed } = member else { panic!("expected This") };
+        assert_eq!(allowed.len(), 2);
+
+        // unknown relation returns None
+        assert!(schema.get_rewrite("document", "nonexistent").is_none());
+    }
 }
