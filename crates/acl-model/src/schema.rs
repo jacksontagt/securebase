@@ -54,6 +54,10 @@ impl Schema {
     pub fn type_def(&self, type_name: &str) -> Option<&TypeDef> {
         self.types.get(type_name)
     }
+
+    pub fn type_count(&self) -> usize {
+        self.types.len()
+    }
 }
 
 #[derive(Debug)]

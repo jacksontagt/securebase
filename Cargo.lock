@@ -5,6 +5,9 @@ version = 4
 [[package]]
 name = "acl-api"
 version = "0.1.0"
+dependencies = [
+ "acl-model",
+]
 
 [[package]]
 name = "acl-engine"
@@ -191,6 +194,9 @@ checksum = "dbb5fb1acd8a1a18b3dd5be62d25485eb770e05afb408a9627d14d451bae12da"
 [[package]]
 name = "securebase-acl"
 version = "0.1.0"
+dependencies = [
+ "acl-api",
+]
 
 [[package]]
 name = "securebase-auth"
