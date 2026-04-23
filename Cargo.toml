@@ -37,3 +37,4 @@ auth-core        = { path = "crates/auth-core" }
 auth-api         = { path = "crates/auth-api" }
 data-api         = { path = "crates/data-api" }
 storage-api      = { path = "crates/storage-api" }
+chumsky          = "0.12.0"
