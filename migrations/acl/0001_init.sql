@@ -10,12 +10,13 @@ $$;
 
 GRANT USAGE ON SCHEMA acl TO acl_service;
 
--- placeholder table; replaced by acl.tuples later
 CREATE TABLE IF NOT EXISTS acl.schemas (
     id      SERIAL PRIMARY KEY,
-    name    TEXT NOT NULL UNIQUE,
+    name    TEXT NOT NULL,
+    version INT NOT NULL,
     body    TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (name, version)
 );
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON acl.schemas TO acl_service;
