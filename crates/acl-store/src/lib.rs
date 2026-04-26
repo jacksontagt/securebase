@@ -1,7 +1,6 @@
 use acl_engine::{StoreError, TupleStore};
 use acl_model::tuple::{ObjectRef, SubjectRef, Tuple};
 use async_trait::async_trait;
-#[allow(unused_imports)]
 use sqlx::{PgPool, Row};
 
 pub struct PostgresTupleStore {
@@ -14,9 +13,8 @@ impl PostgresTupleStore {
     }
 }
 
-// Maps a SubjectRef to the three DB columns.
-// Empty string sentinel for subject_relation means "no relation" (direct user).
-// Wildcard is stored as namespace='*', id='*', relation=''.
+// Empty string for relation means no relation (direct user)
+// Wildcard is stored as namespace='*', id='*', relation=''
 fn subject_to_parts(s: &SubjectRef) -> (String, String, String) {
     match s {
         SubjectRef::Wildcard => ("*".into(), "*".into(), "".into()),
@@ -97,10 +95,29 @@ impl TupleStore for PostgresTupleStore {
 
     async fn read_direct(
         &self,
-        _object: &ObjectRef,
-        _relation: &str,
+        object: &ObjectRef,
+        relation: &str,
     ) -> Result<Vec<SubjectRef>, StoreError> {
-        todo!()
+        let rows = sqlx::query(
+            "SELECT subject_namespace, subject_id, subject_relation
+             FROM acl.tuples
+             WHERE object_namespace=$1 AND object_id=$2 AND relation=$3",
+        )
+        .bind(object.namespace())
+        .bind(object.id())
+        .bind(relation)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StoreError::backend)?;
+
+        rows.iter()
+            .map(|r| {
+                let ns: String = r.get("subject_namespace");
+                let id: String = r.get("subject_id");
+                let rel: String = r.get("subject_relation");
+                row_to_subject(&ns, &id, &rel)
+            })
+            .collect()
     }
 
     async fn read_reverse(&self, _subject: &SubjectRef) -> Result<Vec<Tuple>, StoreError> {
@@ -194,5 +211,59 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 0);
+    }
+
+    #[sqlx::test(migrations = "../../migrations/acl")]
+    async fn read_direct_returns_subject(pool: PgPool) {
+        let store = PostgresTupleStore::new(pool);
+        store
+            .write(vec![direct_tuple("document", "readme", "viewer", "user", "alice")], vec![])
+            .await
+            .unwrap();
+        let obj = ObjectRef::new("document", "readme").unwrap();
+        let subjects = store.read_direct(&obj, "viewer").await.unwrap();
+        assert_eq!(subjects.len(), 1);
+        assert_eq!(subjects[0].to_string(), "user:alice");
+    }
+
+    #[sqlx::test(migrations = "../../migrations/acl")]
+    async fn read_direct_filters_by_relation(pool: PgPool) {
+        let store = PostgresTupleStore::new(pool);
+        store
+            .write(
+                vec![
+                    direct_tuple("document", "readme", "viewer", "user", "alice"),
+                    direct_tuple("document", "readme", "editor", "user", "bob"),
+                ],
+                vec![],
+            )
+            .await
+            .unwrap();
+        let obj = ObjectRef::new("document", "readme").unwrap();
+        let subjects = store.read_direct(&obj, "viewer").await.unwrap();
+        assert_eq!(subjects.len(), 1);
+        assert_eq!(subjects[0].to_string(), "user:alice");
+    }
+
+    #[sqlx::test(migrations = "../../migrations/acl")]
+    async fn read_direct_empty_for_unknown_object(pool: PgPool) {
+        let store = PostgresTupleStore::new(pool);
+        let obj = ObjectRef::new("document", "no-such-doc").unwrap();
+        let subjects = store.read_direct(&obj, "viewer").await.unwrap();
+        assert!(subjects.is_empty());
+    }
+
+    #[sqlx::test(migrations = "../../migrations/acl")]
+    async fn read_direct_returns_userset_subject(pool: PgPool) {
+        let store = PostgresTupleStore::new(pool);
+        let obj = ObjectRef::new("document", "readme").unwrap();
+        let group_obj = ObjectRef::new("group", "eng").unwrap();
+        let group_subj = SubjectRef::user(group_obj, Some("member".into())).unwrap();
+        let t = Tuple::new(obj, "viewer", group_subj).unwrap();
+        store.write(vec![t], vec![]).await.unwrap();
+        let obj2 = ObjectRef::new("document", "readme").unwrap();
+        let subjects = store.read_direct(&obj2, "viewer").await.unwrap();
+        assert_eq!(subjects.len(), 1);
+        assert_eq!(subjects[0].to_string(), "group:eng#member");
     }
 }
