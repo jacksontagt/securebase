@@ -84,7 +84,13 @@ pub fn parse_schema(input: &str) -> Result<Schema, Vec<SchemaError>> {
         for (name, rewrite) in raw.relations {
             relations.insert(name, rewrite);
         }
-        types.insert(raw.name.clone(), TypeDef { name: raw.name, relations });
+        types.insert(
+            raw.name.clone(),
+            TypeDef {
+                name: raw.name,
+                relations,
+            },
+        );
     }
     let validation_errors = validator::validate(&types);
     if !validation_errors.is_empty() {
@@ -100,27 +106,47 @@ mod tests {
     #[test]
     fn rewrite_variants_construct() {
         let _this = Rewrite::This { allowed: vec![] };
-        let _cu = Rewrite::ComputedUserset { relation: "editor".into() };
-        let _ttu = Rewrite::TupleToUserset { tupleset: "parent".into(), computed: "viewer".into() };
+        let _cu = Rewrite::ComputedUserset {
+            relation: "editor".into(),
+        };
+        let _ttu = Rewrite::TupleToUserset {
+            tupleset: "parent".into(),
+            computed: "viewer".into(),
+        };
         let _union = Rewrite::Union(vec![
             Rewrite::This { allowed: vec![] },
-            Rewrite::ComputedUserset { relation: "editor".into() },
+            Rewrite::ComputedUserset {
+                relation: "editor".into(),
+            },
         ]);
         let _intersection = Rewrite::Intersection(vec![
             Rewrite::This { allowed: vec![] },
-            Rewrite::ComputedUserset { relation: "member".into() },
+            Rewrite::ComputedUserset {
+                relation: "member".into(),
+            },
         ]);
         let _exclusion = Rewrite::Exclusion(
             Box::new(Rewrite::This { allowed: vec![] }),
-            Box::new(Rewrite::ComputedUserset { relation: "blocked".into() }),
+            Box::new(Rewrite::ComputedUserset {
+                relation: "blocked".into(),
+            }),
         );
     }
 
     #[test]
     fn type_ref_kinds_construct() {
-        let _direct = TypeRef { type_name: "user".into(), subject: TypeRefKind::Direct };
-        let _wildcard = TypeRef { type_name: "user".into(), subject: TypeRefKind::Wildcard };
-        let _userset = TypeRef { type_name: "group".into(), subject: TypeRefKind::Userset("member".into()) };
+        let _direct = TypeRef {
+            type_name: "user".into(),
+            subject: TypeRefKind::Direct,
+        };
+        let _wildcard = TypeRef {
+            type_name: "user".into(),
+            subject: TypeRefKind::Wildcard,
+        };
+        let _userset = TypeRef {
+            type_name: "group".into(),
+            subject: TypeRefKind::Userset("member".into()),
+        };
     }
 
     #[test]
@@ -128,13 +154,27 @@ mod tests {
         let mut relations = HashMap::new();
         relations.insert(
             "viewer".into(),
-            Rewrite::This { allowed: vec![TypeRef { type_name: "user".into(), subject: TypeRefKind::Direct }] },
+            Rewrite::This {
+                allowed: vec![TypeRef {
+                    type_name: "user".into(),
+                    subject: TypeRefKind::Direct,
+                }],
+            },
         );
         let mut types = HashMap::new();
-        types.insert("doc".into(), TypeDef { name: "doc".into(), relations });
+        types.insert(
+            "doc".into(),
+            TypeDef {
+                name: "doc".into(),
+                relations,
+            },
+        );
         let schema = Schema::new(types);
 
-        assert!(matches!(schema.get_rewrite("doc", "viewer"), Some(Rewrite::This { .. })));
+        assert!(matches!(
+            schema.get_rewrite("doc", "viewer"),
+            Some(Rewrite::This { .. })
+        ));
         assert!(schema.get_rewrite("doc", "nonexistent").is_none());
         assert!(schema.get_rewrite("missing_type", "viewer").is_none());
         assert!(schema.has_type("doc"));
@@ -156,7 +196,10 @@ mod tests {
     #[test]
     fn parse_direct_relation() {
         let schema = parse_schema("type doc\n  relations\n    define owner: [user]").unwrap();
-        assert!(matches!(schema.get_rewrite("doc", "owner"), Some(Rewrite::This { .. })));
+        assert!(matches!(
+            schema.get_rewrite("doc", "owner"),
+            Some(Rewrite::This { .. })
+        ));
     }
 
     #[test]
@@ -166,7 +209,9 @@ mod tests {
         )
         .unwrap();
         let rewrite = schema.get_rewrite("group", "member").unwrap();
-        let Rewrite::This { allowed } = rewrite else { panic!("expected This") };
+        let Rewrite::This { allowed } = rewrite else {
+            panic!("expected This")
+        };
         assert_eq!(allowed.len(), 3);
         assert!(matches!(allowed[0].subject, TypeRefKind::Direct));
         assert!(matches!(&allowed[1].subject, TypeRefKind::Userset(r) if r == "member"));
@@ -200,7 +245,8 @@ mod tests {
 
     #[test]
     fn parse_multiple_types() {
-        let schema = parse_schema("type user\ntype group\n  relations\n    define member: [user]").unwrap();
+        let schema =
+            parse_schema("type user\ntype group\n  relations\n    define member: [user]").unwrap();
         assert!(schema.has_type("user"));
         assert!(schema.has_type("group"));
     }
@@ -214,8 +260,6 @@ mod tests {
         assert!(matches!(errs[0], SchemaError::Parse { .. }));
     }
 
-    // --- Step 3: composite rewrites ---
-
     #[test]
     fn parse_union_two() {
         let schema = parse_schema(
@@ -223,7 +267,9 @@ mod tests {
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
-        let Rewrite::Union(v) = r else { panic!("expected Union, got {r:?}") };
+        let Rewrite::Union(v) = r else {
+            panic!("expected Union, got {r:?}")
+        };
         assert_eq!(v.len(), 2);
         assert!(matches!(v[0], Rewrite::This { .. }));
         assert!(matches!(&v[1], Rewrite::ComputedUserset { relation } if relation == "editor"));
@@ -231,17 +277,20 @@ mod tests {
 
     #[test]
     fn parse_union_flattened() {
-        // A or B or C → Union([A, B, C]), not Union([Union([A, B]), C])
         let schema = parse_schema(
             "type doc\n  relations\n    define parent: [folder]\n    define editor: [user]\n    define viewer: [user] or editor or viewer from parent",
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
-        let Rewrite::Union(v) = r else { panic!("expected Union, got {r:?}") };
+        let Rewrite::Union(v) = r else {
+            panic!("expected Union, got {r:?}")
+        };
         assert_eq!(v.len(), 3);
         assert!(matches!(v[0], Rewrite::This { .. }));
         assert!(matches!(&v[1], Rewrite::ComputedUserset { relation } if relation == "editor"));
-        assert!(matches!(&v[2], Rewrite::TupleToUserset { tupleset, computed } if tupleset == "parent" && computed == "viewer"));
+        assert!(
+            matches!(&v[2], Rewrite::TupleToUserset { tupleset, computed } if tupleset == "parent" && computed == "viewer")
+        );
     }
 
     #[test]
@@ -251,7 +300,9 @@ mod tests {
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
-        let Rewrite::Intersection(v) = r else { panic!("expected Intersection, got {r:?}") };
+        let Rewrite::Intersection(v) = r else {
+            panic!("expected Intersection, got {r:?}")
+        };
         assert_eq!(v.len(), 2);
     }
 
@@ -269,13 +320,14 @@ mod tests {
 
     #[test]
     fn parse_parentheses_grouping() {
-        // ([user] or editor) and member → Intersection([Union([This, CU(editor)]), CU(member)])
         let schema = parse_schema(
             "type doc\n  relations\n    define editor: [user]\n    define member: [user]\n    define viewer: ([user] or editor) and member",
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
-        let Rewrite::Intersection(v) = r else { panic!("expected Intersection, got {r:?}") };
+        let Rewrite::Intersection(v) = r else {
+            panic!("expected Intersection, got {r:?}")
+        };
         assert_eq!(v.len(), 2);
         assert!(matches!(&v[0], Rewrite::Union(inner) if inner.len() == 2));
         assert!(matches!(&v[1], Rewrite::ComputedUserset { relation } if relation == "member"));
@@ -310,37 +362,45 @@ type document
         assert!(schema.has_type("folder"));
         assert!(schema.has_type("document"));
 
-        // document#viewer is a flat Union with 3 members
         let viewer = schema.get_rewrite("document", "viewer").unwrap();
-        let Rewrite::Union(v) = viewer else { panic!("expected Union") };
-        assert_eq!(v.len(), 3, "document#viewer should be Union([This, CU(editor), TTU])");
+        let Rewrite::Union(v) = viewer else {
+            panic!("expected Union")
+        };
+        assert_eq!(
+            v.len(),
+            3,
+            "document#viewer should be Union([This, CU(editor), TTU])"
+        );
 
-        // document#editor is also Union with 3 members
         let editor = schema.get_rewrite("document", "editor").unwrap();
-        let Rewrite::Union(ev) = editor else { panic!("expected Union") };
+        let Rewrite::Union(ev) = editor else {
+            panic!("expected Union")
+        };
         assert_eq!(ev.len(), 3);
 
-        // group#member is This (direct with two type restrictions)
         let member = schema.get_rewrite("group", "member").unwrap();
-        let Rewrite::This { allowed } = member else { panic!("expected This") };
+        let Rewrite::This { allowed } = member else {
+            panic!("expected This")
+        };
         assert_eq!(allowed.len(), 2);
 
-        // unknown relation returns None
         assert!(schema.get_rewrite("document", "nonexistent").is_none());
     }
 
-    // --- Step 4: semantic validation ---
-
     #[test]
     fn validate_undefined_computed_userset() {
-        let result = parse_schema(
-            "type doc\n  relations\n    define viewer: nonexistent",
-        );
+        let result = parse_schema("type doc\n  relations\n    define viewer: nonexistent");
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert_eq!(errs.len(), 1);
-        let SchemaError::UndefinedRelation { type_name, relation, referenced_from } = &errs[0]
-        else { panic!("expected UndefinedRelation") };
+        let SchemaError::UndefinedRelation {
+            type_name,
+            relation,
+            referenced_from,
+        } = &errs[0]
+        else {
+            panic!("expected UndefinedRelation")
+        };
         assert_eq!(type_name, "doc");
         assert_eq!(relation, "nonexistent");
         assert_eq!(referenced_from, "viewer");
@@ -348,9 +408,7 @@ type document
 
     #[test]
     fn validate_undefined_tupleset() {
-        let result = parse_schema(
-            "type doc\n  relations\n    define viewer: viewer from ghost",
-        );
+        let result = parse_schema("type doc\n  relations\n    define viewer: viewer from ghost");
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert!(errs.iter().any(|e| matches!(e,
@@ -372,18 +430,15 @@ type document
 
     #[test]
     fn validate_accumulates_multiple_errors() {
-        let result = parse_schema(
-            "type doc\n  relations\n    define a: ghost1\n    define b: ghost2",
-        );
+        let result =
+            parse_schema("type doc\n  relations\n    define a: ghost1\n    define b: ghost2");
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().len(), 2);
     }
 
     #[test]
     fn validate_undefined_inside_union() {
-        let result = parse_schema(
-            "type doc\n  relations\n    define viewer: [user] or ghost",
-        );
+        let result = parse_schema("type doc\n  relations\n    define viewer: [user] or ghost");
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert!(errs.iter().any(|e| matches!(e,

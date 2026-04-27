@@ -1,5 +1,5 @@
-pub mod tuple;
 pub mod schema;
+pub mod tuple;
 
-pub use tuple::{ObjectRef, ParseError, SubjectRef, Tuple};
 pub use schema::{parse_schema, Rewrite, Schema, SchemaError, TypeDef, TypeRef, TypeRefKind};
+pub use tuple::{ObjectRef, ParseError, SubjectRef, Tuple};

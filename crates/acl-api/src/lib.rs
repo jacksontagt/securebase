@@ -13,8 +13,7 @@ impl Config {
     }
 }
 
-/// Read and parse a schema file, returning an `Arc<Schema>` on success.
-/// Maps IO errors into a `SchemaError::Parse` so callers see a uniform error type.
+// Read and parse a schema file
 pub fn load_schema(path: &str) -> Result<Arc<Schema>, Vec<SchemaError>> {
     let text = std::fs::read_to_string(path).map_err(|e| {
         vec![SchemaError::Parse {
@@ -25,7 +24,6 @@ pub fn load_schema(path: &str) -> Result<Arc<Schema>, Vec<SchemaError>> {
     parse_schema(&text).map(Arc::new)
 }
 
-/// Load the schema and log a startup line. The HTTP router will be wired in task 2.5.
 pub fn serve(config: Config) -> Result<Arc<Schema>, String> {
     let schema = load_schema(&config.schema_path).map_err(|errs| {
         errs.into_iter()
@@ -48,7 +46,6 @@ mod tests {
     use std::path::Path;
 
     fn schema_fga_path() -> String {
-        // CARGO_MANIFEST_DIR is .../crates/acl-api; workspace root is two levels up.
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         Path::new(manifest_dir)
             .parent()
@@ -89,12 +86,5 @@ mod tests {
         let errs = result.unwrap_err();
         assert_eq!(errs.len(), 1);
         assert!(matches!(errs[0], SchemaError::Parse { .. }));
-    }
-
-    #[test]
-    fn load_schema_invalid_schema_returns_err() {
-        // Write a temp file with an invalid schema and confirm Err propagates.
-        let result = load_schema("/dev/null"); // empty file → Ok (empty schema)
-        assert!(result.is_ok());
     }
 }

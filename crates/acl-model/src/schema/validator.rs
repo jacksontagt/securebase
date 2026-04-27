@@ -1,8 +1,8 @@
-use std::collections::{HashMap, HashSet};
 use super::{Rewrite, SchemaError, TypeDef};
+use std::collections::{HashMap, HashSet};
 
-/// Validate that every relation name referenced in a rewrite is defined
-/// within the same type block. Returns all errors accumulated.
+// Validate that every relation name referenced in a rewrite is defined
+// within the same type block. Returns all errors accumulated.
 pub(super) fn validate(types: &HashMap<String, TypeDef>) -> Vec<SchemaError> {
     let mut errors = Vec::new();
     for (type_name, type_def) in types {

@@ -1,5 +1,5 @@
-use chumsky::prelude::*;
 use super::{Rewrite, SchemaError, TypeRef, TypeRefKind};
+use chumsky::prelude::*;
 
 pub(super) struct RawTypeDef {
     pub name: String,
@@ -30,7 +30,7 @@ enum BinOp {
     ButNot,
 }
 
-// Flatten same-operator chains: A or B or C → Union([A, B, C]), not Union([Union([A, B]), C]).
+// Flatten same-operator chains: A or B or C => Union([A, B, C]), not Union([Union([A, B]), C]).
 fn merge(lhs: Rewrite, op: BinOp, rhs: Rewrite) -> Rewrite {
     match op {
         BinOp::Or => match lhs {
@@ -51,8 +51,8 @@ fn merge(lhs: Rewrite, op: BinOp, rhs: Rewrite) -> Rewrite {
     }
 }
 
-// Matches an identifier that equals `word`; backtracks via try_map if it doesn't.
-fn kw<'a>(word: &'static str) -> impl Parser<'a, &'a str, (), Err<'a>> + Clone {
+// Matches an identifier that equals `word`; backtracks via try_map if it doesn't
+fn match_word<'a>(word: &'static str) -> impl Parser<'a, &'a str, (), Err<'a>> + Clone {
     text::ascii::ident()
         .try_map(move |s: &str, span| {
             if s == word {
@@ -68,7 +68,7 @@ fn ident_str<'a>() -> impl Parser<'a, &'a str, String, Err<'a>> + Clone {
     text::ascii::ident().map(|s: &str| s.to_string()).padded()
 }
 
-// Parses one entry inside a bracket list: `user`, `user:*`, or `group#member`.
+// Parses one entry inside a bracket list: "user", "user:*", or "group#member"
 fn type_ref_parser<'a>() -> impl Parser<'a, &'a str, TypeRef, Err<'a>> + Clone {
     let base = text::ascii::ident().map(|s: &str| s.to_string());
 
@@ -86,7 +86,7 @@ fn type_ref_parser<'a>() -> impl Parser<'a, &'a str, TypeRef, Err<'a>> + Clone {
         .padded()
 }
 
-// Parses `[user]`, `[user, group#member]`, etc. → Rewrite::This.
+// Parses "[user]", "[user, group#member]"
 fn type_restriction_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> + Clone {
     just('[')
         .padded()
@@ -100,9 +100,6 @@ fn type_restriction_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> +
         .map(|allowed| Rewrite::This { allowed })
 }
 
-// Parses a bare identifier or `ident from ident`, handling both
-// ComputedUserset and TupleToUserset in one pass to avoid backtracking
-// after consuming the leading ident.
 fn ident_rewrite_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> + Clone {
     let reserved = |s: &str| {
         matches!(
@@ -120,15 +117,17 @@ fn ident_rewrite_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> + Cl
             }
         })
         .padded()
-        .then(kw("from").ignore_then(ident_str()).or_not())
+        .then(match_word("from").ignore_then(ident_str()).or_not())
         .map(|(name, from_part)| match from_part {
-            Some(tupleset) => Rewrite::TupleToUserset { tupleset, computed: name },
+            Some(tupleset) => Rewrite::TupleToUserset {
+                tupleset,
+                computed: name,
+            },
             None => Rewrite::ComputedUserset { relation: name },
         })
 }
 
-// Full recursive expression parser: handles atoms plus or/and/but-not chains
-// and parenthesised grouping.
+// handles or/and/but-not chains and parentheses
 fn rewrite_expr_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> {
     recursive(|expr| {
         let atom = choice((
@@ -139,30 +138,33 @@ fn rewrite_expr_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> {
         ));
 
         let op = choice((
-            kw("or").to(BinOp::Or),
-            kw("and").to(BinOp::And),
-            kw("but").then_ignore(kw("not")).to(BinOp::ButNot),
+            match_word("or").to(BinOp::Or),
+            match_word("and").to(BinOp::And),
+            match_word("but")
+                .then_ignore(match_word("not"))
+                .to(BinOp::ButNot),
         ));
 
-        // Collect (op, rhs) pairs and fold left so that A or B or C
-        // produces Union([A, B, C]) rather than Union([Union([A, B]), C]).
+        // Collect (operator, rhs) pairs and fold left so that A or B or C
+        // becomes Union([A, B, C]) rather than Union([Union([A, B]), C]).
         atom.clone()
             .then(op.then(atom).repeated().collect::<Vec<_>>())
             .map(|(first, rest)| {
-                rest.into_iter().fold(first, |lhs, (op, rhs)| merge(lhs, op, rhs))
+                rest.into_iter()
+                    .fold(first, |lhs, (op, rhs)| merge(lhs, op, rhs))
             })
     })
 }
 
 fn relation_def_parser<'a>() -> impl Parser<'a, &'a str, (String, Rewrite), Err<'a>> {
-    kw("define")
+    match_word("define")
         .ignore_then(ident_str())
         .then_ignore(just(':').padded())
         .then(rewrite_expr_parser())
 }
 
 fn type_body_parser<'a>() -> impl Parser<'a, &'a str, Vec<(String, Rewrite)>, Err<'a>> {
-    kw("relations").ignore_then(
+    match_word("relations").ignore_then(
         relation_def_parser()
             .repeated()
             .at_least(1)
@@ -171,7 +173,7 @@ fn type_body_parser<'a>() -> impl Parser<'a, &'a str, Vec<(String, Rewrite)>, Er
 }
 
 fn type_def_parser<'a>() -> impl Parser<'a, &'a str, RawTypeDef, Err<'a>> {
-    kw("type")
+    match_word("type")
         .ignore_then(ident_str())
         .then(type_body_parser().or_not())
         .map(|(name, body)| RawTypeDef {

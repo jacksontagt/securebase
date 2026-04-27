@@ -7,6 +7,6 @@ fn main() {
         eprintln!("startup failed:\n{e}");
         std::process::exit(1);
     });
-    // HTTP server wired in task 2.5 (acl-api::serve will block here).
+
     eprintln!("ACL service ready");
 }
