@@ -52,7 +52,7 @@ mod tests {
             .unwrap()
             .parent()
             .unwrap()
-            .join("schema.fga")
+            .join("crates/acl-model/test/schema.fga")
             .to_str()
             .unwrap()
             .to_string()
