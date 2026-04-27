@@ -35,7 +35,6 @@ fn row_to_subject(ns: &str, id: &str, rel: &str) -> Result<SubjectRef, StoreErro
     SubjectRef::user(obj, relation).map_err(|e| StoreError::CorruptData(e.to_string()))
 }
 
-#[allow(dead_code)]
 fn row_to_tuple(
     obj_ns: &str,
     obj_id: &str,
@@ -120,8 +119,32 @@ impl TupleStore for PostgresTupleStore {
             .collect()
     }
 
-    async fn read_reverse(&self, _subject: &SubjectRef) -> Result<Vec<Tuple>, StoreError> {
-        todo!()
+    async fn read_reverse(&self, subject: &SubjectRef) -> Result<Vec<Tuple>, StoreError> {
+        let (sn, si, sr) = subject_to_parts(subject);
+        let rows = sqlx::query(
+            "SELECT object_namespace, object_id, relation,
+                    subject_namespace, subject_id, subject_relation
+             FROM acl.tuples
+             WHERE subject_namespace=$1 AND subject_id=$2 AND subject_relation=$3",
+        )
+        .bind(&sn)
+        .bind(&si)
+        .bind(&sr)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StoreError::backend)?;
+
+        rows.iter()
+            .map(|r| {
+                let obj_ns: String = r.get("object_namespace");
+                let obj_id: String = r.get("object_id");
+                let rel: String = r.get("relation");
+                let subj_ns: String = r.get("subject_namespace");
+                let subj_id: String = r.get("subject_id");
+                let subj_rel: String = r.get("subject_relation");
+                row_to_tuple(&obj_ns, &obj_id, &rel, &subj_ns, &subj_id, &subj_rel)
+            })
+            .collect()
     }
 }
 
@@ -265,5 +288,68 @@ mod tests {
         let subjects = store.read_direct(&obj2, "viewer").await.unwrap();
         assert_eq!(subjects.len(), 1);
         assert_eq!(subjects[0].to_string(), "group:eng#member");
+    }
+
+    #[sqlx::test(migrations = "../../migrations/acl")]
+    async fn read_reverse_direct_user(pool: PgPool) {
+        let store = PostgresTupleStore::new(pool);
+        store
+            .write(vec![direct_tuple("document", "readme", "viewer", "user", "alice")], vec![])
+            .await
+            .unwrap();
+        let subj = SubjectRef::user(ObjectRef::new("user", "alice").unwrap(), None).unwrap();
+        let tuples = store.read_reverse(&subj).await.unwrap();
+        assert_eq!(tuples.len(), 1);
+        assert_eq!(tuples[0].to_string(), "document:readme#viewer@user:alice");
+    }
+
+    #[sqlx::test(migrations = "../../migrations/acl")]
+    async fn read_reverse_userset(pool: PgPool) {
+        let store = PostgresTupleStore::new(pool);
+        let obj = ObjectRef::new("document", "readme").unwrap();
+        let group_subj = SubjectRef::user(
+            ObjectRef::new("group", "eng").unwrap(),
+            Some("member".into()),
+        )
+        .unwrap();
+        let t = Tuple::new(obj, "viewer", group_subj).unwrap();
+        store.write(vec![t], vec![]).await.unwrap();
+        let query_subj = SubjectRef::user(
+            ObjectRef::new("group", "eng").unwrap(),
+            Some("member".into()),
+        )
+        .unwrap();
+        let tuples = store.read_reverse(&query_subj).await.unwrap();
+        assert_eq!(tuples.len(), 1);
+        assert_eq!(tuples[0].to_string(), "document:readme#viewer@group:eng#member");
+    }
+
+    #[sqlx::test(migrations = "../../migrations/acl")]
+    async fn read_reverse_userset_does_not_match_direct(pool: PgPool) {
+        let store = PostgresTupleStore::new(pool);
+        // Write a direct-user tuple for group:eng (no relation)
+        store
+            .write(vec![direct_tuple("document", "readme", "viewer", "group", "eng")], vec![])
+            .await
+            .unwrap();
+        // Query for userset group:eng#member — must NOT match the direct tuple
+        let query_subj = SubjectRef::user(
+            ObjectRef::new("group", "eng").unwrap(),
+            Some("member".into()),
+        )
+        .unwrap();
+        let tuples = store.read_reverse(&query_subj).await.unwrap();
+        assert!(tuples.is_empty());
+    }
+
+    #[sqlx::test(migrations = "../../migrations/acl")]
+    async fn read_reverse_wildcard(pool: PgPool) {
+        let store = PostgresTupleStore::new(pool);
+        let obj = ObjectRef::new("document", "readme").unwrap();
+        let t = Tuple::new(obj, "viewer", SubjectRef::Wildcard).unwrap();
+        store.write(vec![t], vec![]).await.unwrap();
+        let tuples = store.read_reverse(&SubjectRef::Wildcard).await.unwrap();
+        assert_eq!(tuples.len(), 1);
+        assert_eq!(tuples[0].to_string(), "document:readme#viewer@*");
     }
 }
