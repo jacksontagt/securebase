@@ -9,6 +9,30 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securebase"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gotrue:
+    image: supabase/gotrue:v2.188.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "9999:9999"
+    environment:
+      GOTRUE_API_HOST: localhost
+      PORT: 9999
+      API_EXTERNAL_URL: http://localhost:9999
+      GOTRUE_DB_DRIVER: postgres
+      DATABASE_URL: postgres://securebase:securebase@postgres:5432/securebase?sslmode=disable
+      GOTRUE_SITE_URL: http://localhost:3000 # this we will probably move to some .env file
+      GOTRUE_JWT_SECRET: supasecret
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
 
   garage:
     image: dxflrs/garage:v1.0.1

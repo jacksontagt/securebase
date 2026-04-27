@@ -5,3 +5,4 @@ edition.workspace = true
 
 [dependencies]
 chumsky.workspace = true
+thiserror.workspace = true
