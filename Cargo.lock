@@ -6,7 +6,20 @@ version = 4
 name = "acl-api"
 version = "0.1.0"
 dependencies = [
+ "acl-engine",
  "acl-model",
+ "acl-store",
+ "anyhow",
+ "auth-core",
+ "axum",
+ "securebase-db",
+ "securebase-proto",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tower-http",
 ]
 
 [[package]]
@@ -1703,6 +1716,8 @@ name = "securebase-acl"
 version = "0.1.0"
 dependencies = [
  "acl-api",
+ "anyhow",
+ "tokio",
 ]
 
 [[package]]
@@ -1733,6 +1748,7 @@ dependencies = [
 name = "securebase-proto"
 version = "0.1.0"
 dependencies = [
+ "acl-model",
  "serde",
  "serde_json",
 ]
@@ -2376,6 +2392,7 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]

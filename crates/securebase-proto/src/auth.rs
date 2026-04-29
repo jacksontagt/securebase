@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenClaims {
+    #[serde(rename = "sub")]
     pub subject: String,
     pub exp: i64,
     #[serde(default)]

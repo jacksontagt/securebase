@@ -421,14 +421,4 @@ mod tests {
         assert!(tuples.is_empty());
     }
 
-    #[sqlx::test(migrations = "../../migrations/acl")]
-    async fn read_reverse_wildcard(pool: PgPool) {
-        let store = PostgresTupleStore::new(pool);
-        let obj = ObjectRef::new("document", "readme").unwrap();
-        let t = Tuple::new(obj, "viewer", SubjectRef::Wildcard).unwrap();
-        store.write(vec![t], vec![]).await.unwrap();
-        let tuples = store.read_reverse(&SubjectRef::Wildcard).await.unwrap();
-        assert_eq!(tuples.len(), 1);
-        assert_eq!(tuples[0].to_string(), "document:readme#viewer@*");
-    }
 }

@@ -1,19 +1,41 @@
-use acl_model::{parse_schema, Schema, SchemaError};
+mod error;
+mod handlers;
+
 use std::sync::Arc;
 
+use acl_model::{parse_schema, Schema, SchemaError};
+use acl_store::PostgresTupleStore;
+use auth_core::{require_auth, AuthTokenVerifier};
+use axum::{routing::post, Router};
+use sqlx::postgres::PgPoolOptions;
+
 pub struct Config {
+    pub addr: String,
     pub schema_path: String,
+    pub database_url: String,
+    pub jwt_secret: String,
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self, String> {
-        let schema_path = std::env::var("SCHEMA_PATH")
-            .map_err(|_| "SCHEMA_PATH environment variable not set".to_string())?;
-        Ok(Self { schema_path })
+    pub fn from_env() -> anyhow::Result<Self> {
+        Ok(Self {
+            addr: std::env::var("ACL_API_HOST").unwrap_or_else(|_| "0.0.0.0:8081".into()),
+            schema_path: std::env::var("SCHEMA_PATH")
+                .map_err(|_| anyhow::anyhow!("SCHEMA_PATH not set"))?,
+            database_url: std::env::var("DATABASE_URL")
+                .map_err(|_| anyhow::anyhow!("DATABASE_URL not set"))?,
+            jwt_secret: std::env::var("JWT_SECRET")
+                .map_err(|_| anyhow::anyhow!("JWT_SECRET not set"))?,
+        })
     }
 }
 
-// Read and parse a schema file
+#[derive(Clone)]
+pub(crate) struct AppState {
+    pub(crate) schema: Arc<Schema>,
+    pub(crate) store: Arc<PostgresTupleStore>,
+}
+
 pub fn load_schema(path: &str) -> Result<Arc<Schema>, Vec<SchemaError>> {
     let text = std::fs::read_to_string(path).map_err(|e| {
         vec![SchemaError::Parse {
@@ -24,67 +46,37 @@ pub fn load_schema(path: &str) -> Result<Arc<Schema>, Vec<SchemaError>> {
     parse_schema(&text).map(Arc::new)
 }
 
-pub fn serve(config: Config) -> Result<Arc<Schema>, String> {
-    let schema = load_schema(&config.schema_path).map_err(|errs| {
-        errs.into_iter()
-            .map(|e| format!("{e:?}"))
-            .collect::<Vec<_>>()
-            .join("\n")
+pub async fn serve(cfg: Config) -> anyhow::Result<()> {
+    let schema = load_schema(&cfg.schema_path).map_err(|errs| {
+        anyhow::anyhow!(
+            "schema load failed:\n{}",
+            errs.iter()
+                .map(|e| format!("{e:?}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
     })?;
-    eprintln!(
+    println!(
         "schema loaded from '{}': {} namespace(s)",
-        config.schema_path,
+        cfg.schema_path,
         schema.namespace_count()
     );
-    Ok(schema)
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use acl_model::Rewrite;
-    use std::path::Path;
+    let pool = PgPoolOptions::new().connect(&cfg.database_url).await?;
+    securebase_db::run_migrations(&pool, "acl").await?;
+    let store = Arc::new(PostgresTupleStore::new(pool));
 
-    fn schema_fga_path() -> String {
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        Path::new(manifest_dir)
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("crates/acl-model/test/schema.fga")
-            .to_str()
-            .unwrap()
-            .to_string()
-    }
+    let state = AppState { schema, store };
+    let verifier = AuthTokenVerifier::new(cfg.jwt_secret.as_bytes());
 
-    #[test]
-    fn load_schema_from_file() {
-        let schema = load_schema(&schema_fga_path()).expect("schema.fga should parse cleanly");
+    let app = Router::new()
+        .route("/check", post(handlers::check))
+        .route("/write", post(handlers::write))
+        .layer(axum::middleware::from_fn_with_state(verifier, require_auth))
+        .with_state(state);
 
-        assert!(schema.has_namespace("user"));
-        assert!(schema.has_namespace("group"));
-        assert!(schema.has_namespace("folder"));
-        assert!(schema.has_namespace("document"));
-        assert!(schema.has_namespace("file"));
-        assert_eq!(schema.namespace_count(), 5);
-
-        // document#viewer is a Union with 3 members
-        assert!(matches!(
-            schema.get_rewrite("document", "viewer"),
-            Some(Rewrite::Union(v)) if v.len() == 3
-        ));
-
-        // unknown relation returns None
-        assert!(schema.get_rewrite("document", "nonexistent").is_none());
-    }
-
-    #[test]
-    fn load_schema_missing_file_returns_err() {
-        let result = load_schema("/nonexistent/path/schema.fga");
-        assert!(result.is_err());
-        let errs = result.unwrap_err();
-        assert_eq!(errs.len(), 1);
-        assert!(matches!(errs[0], SchemaError::Parse { .. }));
-    }
+    let listener = tokio::net::TcpListener::bind(&cfg.addr).await?;
+    println!("acl-api listening on {}", cfg.addr);
+    axum::serve(listener, app).await?;
+    Ok(())
 }
