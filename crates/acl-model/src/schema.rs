@@ -13,7 +13,6 @@ pub struct NamespaceRef {
 #[derive(Debug, Clone)]
 pub enum NamespaceRefKind {
     Direct,
-    Wildcard,
     Userset(String),
 }
 
@@ -139,10 +138,6 @@ mod tests {
             namespace: "user".into(),
             subject: NamespaceRefKind::Direct,
         };
-        let _wildcard = NamespaceRef {
-            namespace: "user".into(),
-            subject: NamespaceRefKind::Wildcard,
-        };
         let _userset = NamespaceRef {
             namespace: "group".into(),
             subject: NamespaceRefKind::Userset("member".into()),
@@ -195,8 +190,7 @@ mod tests {
 
     #[test]
     fn parse_direct_relation() {
-        let schema =
-            parse_schema("namespace doc\n  relations\n    define owner: [user]").unwrap();
+        let schema = parse_schema("namespace doc\n  relations\n    define owner: [user]").unwrap();
         assert!(matches!(
             schema.get_rewrite("doc", "owner"),
             Some(Rewrite::This { .. })
@@ -205,18 +199,16 @@ mod tests {
 
     #[test]
     fn parse_namespace_restrictions_multiple() {
-        let schema = parse_schema(
-            "namespace group\n  relations\n    define member: [user, group#member, user:*]",
-        )
-        .unwrap();
+        let schema =
+            parse_schema("namespace group\n  relations\n    define member: [user, group#member]")
+                .unwrap();
         let rewrite = schema.get_rewrite("group", "member").unwrap();
         let Rewrite::This { allowed } = rewrite else {
             panic!("expected This")
         };
-        assert_eq!(allowed.len(), 3);
+        assert_eq!(allowed.len(), 2);
         assert!(matches!(allowed[0].subject, NamespaceRefKind::Direct));
         assert!(matches!(&allowed[1].subject, NamespaceRefKind::Userset(r) if r == "member"));
-        assert!(matches!(allowed[2].subject, NamespaceRefKind::Wildcard));
     }
 
     #[test]
@@ -391,8 +383,7 @@ namespace document
 
     #[test]
     fn validate_undefined_computed_userset() {
-        let result =
-            parse_schema("namespace doc\n  relations\n    define viewer: nonexistent");
+        let result = parse_schema("namespace doc\n  relations\n    define viewer: nonexistent");
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert_eq!(errs.len(), 1);
@@ -434,17 +425,15 @@ namespace document
 
     #[test]
     fn validate_accumulates_multiple_errors() {
-        let result = parse_schema(
-            "namespace doc\n  relations\n    define a: ghost1\n    define b: ghost2",
-        );
+        let result =
+            parse_schema("namespace doc\n  relations\n    define a: ghost1\n    define b: ghost2");
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().len(), 2);
     }
 
     #[test]
     fn validate_undefined_inside_union() {
-        let result =
-            parse_schema("namespace doc\n  relations\n    define viewer: [user] or ghost");
+        let result = parse_schema("namespace doc\n  relations\n    define viewer: [user] or ghost");
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert!(errs.iter().any(|e| matches!(e,

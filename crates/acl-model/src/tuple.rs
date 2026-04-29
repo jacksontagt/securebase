@@ -19,7 +19,7 @@ fn validate_component(name: &'static str, s: &str) -> Result<(), ParseError> {
     if s.is_empty() {
         return Err(ParseError::EmptyComponent(name));
     }
-    if let Some(c) = s.chars().find(|&c| matches!(c, ':' | '#' | '@')) {
+    if let Some(c) = s.chars().find(|&c| matches!(c, ':' | '#' | '@' | '*')) {
         return Err(ParseError::ReservedCharacter(c));
     }
     Ok(())
@@ -61,7 +61,6 @@ pub enum SubjectRef {
         object: ObjectRef,
         relation: Option<String>,
     },
-    Wildcard,
 }
 
 impl SubjectRef {
@@ -71,16 +70,11 @@ impl SubjectRef {
         }
         Ok(Self::User { object, relation })
     }
-
-    pub fn wildcard() -> Self {
-        Self::Wildcard
-    }
 }
 
 impl fmt::Display for SubjectRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Wildcard => write!(f, "*"),
             Self::User {
                 object,
                 relation: None,
@@ -156,16 +150,12 @@ impl FromStr for Tuple {
         let object = parse_object_ref(object_str)?;
         validate_component("relation", relation)?;
 
-        let subject = if right == "*" {
-            SubjectRef::Wildcard
-        } else {
-            let (subj_obj_str, subj_rel) = match right.find('#') {
-                Some(h) => (&right[..h], Some(right[h + 1..].to_string())),
-                None => (right, None),
-            };
-            let subj_obj = parse_object_ref(subj_obj_str)?;
-            SubjectRef::user(subj_obj, subj_rel)?
+        let (subj_obj_str, subj_rel) = match right.find('#') {
+            Some(h) => (&right[..h], Some(right[h + 1..].to_string())),
+            None => (right, None),
         };
+        let subj_obj = parse_object_ref(subj_obj_str)?;
+        let subject = SubjectRef::user(subj_obj, subj_rel)?;
 
         Tuple::new(object, relation, subject)
     }
@@ -243,11 +233,6 @@ mod tests {
     }
 
     #[test]
-    fn subject_ref_wildcard_display() {
-        assert_eq!(SubjectRef::wildcard().to_string(), "*");
-    }
-
-    #[test]
     fn subject_ref_empty_relation_rejected() {
         let obj = ObjectRef::new("group", "eng").unwrap();
         assert_eq!(
@@ -283,12 +268,6 @@ mod tests {
     #[test]
     fn roundtrip_userset() {
         let s = "document:readme#viewer@group:eng#member";
-        assert_eq!(s.parse::<Tuple>().unwrap().to_string(), s);
-    }
-
-    #[test]
-    fn roundtrip_wildcard() {
-        let s = "document:readme#viewer@*";
         assert_eq!(s.parse::<Tuple>().unwrap().to_string(), s);
     }
 
@@ -343,7 +322,7 @@ mod tests {
     #[test]
     fn tuple_new_validates_relation() {
         let obj = ObjectRef::new("document", "readme").unwrap();
-        let subj = SubjectRef::wildcard();
+        let subj = SubjectRef::user(ObjectRef::new("user", "alice").unwrap(), None).unwrap();
         assert_eq!(
             Tuple::new(obj, "", subj),
             Err(ParseError::EmptyComponent("relation"))
