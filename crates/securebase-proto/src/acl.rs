@@ -1,10 +1,10 @@
-/// A relation tuple: resource_type:resource_id#relation@subject
+/// A relation tuple: namespace:object_id#relation@subject
 ///
 /// Example: document:readme#viewer@user:alice
 ///          document:readme#viewer@group:eng#member
 pub struct Tuple {
-    pub resource_type: String,
-    pub resource_id: String,
+    pub namespace: String,
+    pub object_id: String,
     pub relation: String,
     pub subject: Subject,
 }
@@ -13,8 +13,8 @@ pub struct Tuple {
 pub enum Subject {
     User(String),
     UserSet {
-        resource_type: String,
-        resource_id: String,
+        namespace: String,
+        object_id: String,
         relation: String,
     },
 }
@@ -30,9 +30,9 @@ pub enum WriteOp {
 }
 
 pub struct CheckRequest {
-    pub resource_type: String,
-    pub resource_id: String,
-    pub permission: String,
+    pub namespace: String,
+    pub object_id: String,
+    pub relation: String,
     pub subject: Subject,
 }
 
@@ -41,12 +41,12 @@ pub struct CheckResponse {
 }
 
 pub struct ExpandRequest {
-    pub resource_type: String,
-    pub resource_id: String,
-    pub permission: String,
+    pub namespace: String,
+    pub object_id: String,
+    pub relation: String,
 }
 
-/// Tree of subjects that have the given permission on the resource
+/// Tree of subjects that have the given relation on the object
 pub enum ExpandResponse {
     Leaf(Subject),
     Union(Vec<ExpandResponse>),

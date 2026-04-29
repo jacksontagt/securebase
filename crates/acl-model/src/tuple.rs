@@ -25,7 +25,7 @@ fn validate_component(name: &'static str, s: &str) -> Result<(), ParseError> {
     Ok(())
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectRef {
     namespace: String,
     id: String,
@@ -55,7 +55,7 @@ impl fmt::Display for ObjectRef {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SubjectRef {
     User {
         object: ObjectRef,
@@ -93,7 +93,7 @@ impl fmt::Display for SubjectRef {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Tuple {
     object: ObjectRef,
     relation: String,
