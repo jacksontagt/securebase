@@ -69,6 +69,7 @@ impl<'a, S: TupleStore> Checker<'a, S> {
         }
     }
 
+    /// Run check on store for this relation
     async fn check_direct(
         &self,
         object: &ObjectRef,
@@ -80,15 +81,17 @@ impl<'a, S: TupleStore> Checker<'a, S> {
         Ok(stored.iter().any(|s| s == subject))
     }
 
+    /// Re-run check on other relation
     async fn check_computed_userset(
         &self,
         object: &ObjectRef,
         relation: &str,
         subject: &SubjectRef,
     ) -> Result<bool, CheckError> {
-        todo!()
+        Box::pin(self.check(object, relation, subject)).await
     }
 
+    /// Read tupleset on `object`; for each parent, recurse into `computed` on that parent.
     async fn check_ttu(
         &self,
         object: &ObjectRef,
@@ -96,7 +99,17 @@ impl<'a, S: TupleStore> Checker<'a, S> {
         computed: &str,
         subject: &SubjectRef,
     ) -> Result<bool, CheckError> {
-        todo!()
+        let parents = self.store.read_direct(object, tupleset).await?;
+        for parent in &parents {
+            let parent_obj = match parent {
+                SubjectRef::User { object, .. } => object,
+                _ => continue,
+            };
+            if Box::pin(self.check(parent_obj, computed, subject)).await? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     // TODO: union, intersection, and exclusion can and should be parellilzed
