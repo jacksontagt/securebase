@@ -1,0 +1,24 @@
+namespace user
+
+namespace group
+  relations
+    define member: [user, group#member]
+
+namespace folder
+  relations
+    define owner: [user]
+    define editor: [user] or owner
+    define viewer: [user] or editor
+
+namespace document
+  relations
+    define parent: [folder]
+    define owner: [user]
+    define editor: [user] or owner or editor from parent
+    define viewer: [user] or editor or viewer from parent
+
+namespace file
+  relations
+    define parent: [folder]
+    define owner: [user]
+    define viewer: [user] or owner or viewer from parent

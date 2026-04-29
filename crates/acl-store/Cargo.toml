@@ -2,3 +2,14 @@
 name = "acl-store"
 version = "0.1.0"
 edition.workspace = true
+
+[dependencies]
+acl-engine  = { workspace = true }
+acl-model   = { workspace = true }
+sqlx        = { workspace = true }
+async-trait = { workspace = true }
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[dev-dependencies]
+dotenvy = { workspace = true }
