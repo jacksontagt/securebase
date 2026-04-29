@@ -12,6 +12,11 @@ dependencies = [
 [[package]]
 name = "acl-engine"
 version = "0.1.0"
+dependencies = [
+ "acl-model",
+ "async-trait",
+ "thiserror",
+]
 
 [[package]]
 name = "acl-model"
@@ -24,6 +29,14 @@ dependencies = [
 [[package]]
 name = "acl-store"
 version = "0.1.0"
+dependencies = [
+ "acl-engine",
+ "acl-model",
+ "async-trait",
+ "dotenvy",
+ "sqlx",
+ "tokio",
+]
 
 [[package]]
 name = "aho-corasick"
@@ -53,6 +66,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7eb93bbb63b9c227414f6eb3a0adfddca591a8ce1e9b60661bb08969b87e340b"
 dependencies = [
  "object",
+]
+
+[[package]]
+name = "async-trait"
+version = "0.1.89"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9035ad2d096bed7955a320ee7e2230574d28fd3c3a0f186cbea1ff3c7eed5dbb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1765,7 +1789,19 @@ dependencies = [
  "mio",
  "pin-project-lite",
  "socket2",
+ "tokio-macros",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
