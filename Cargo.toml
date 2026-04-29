@@ -38,6 +38,7 @@ auth-api         = { path = "crates/auth-api" }
 data-api         = { path = "crates/data-api" }
 storage-api      = { path = "crates/storage-api" }
 
+chumsky          = "0.12.0"
 sqlx        = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "migrate", "macros", "uuid", "time"] }
 thiserror   = "2.0.18"
 async-trait = "0.1"
