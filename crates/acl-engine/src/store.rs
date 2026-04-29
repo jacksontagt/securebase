@@ -18,13 +18,14 @@ impl StoreError {
 #[async_trait]
 pub trait TupleStore: Send + Sync {
     async fn write(&self, writes: Vec<Tuple>, deletes: Vec<Tuple>) -> Result<(), StoreError>;
+
+    /// Get all subjects of some [object] with [relation]
     async fn read_direct(
         &self,
         object: &ObjectRef,
         relation: &str,
     ) -> Result<Vec<SubjectRef>, StoreError>;
+
+    /// Get all relations (and objects) for [subject]
     async fn read_reverse(&self, subject: &SubjectRef) -> Result<Vec<Tuple>, StoreError>;
 }
-
-#[cfg(test)]
-fn _assert_object_safe(_: &dyn TupleStore) {}
