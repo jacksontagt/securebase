@@ -68,18 +68,15 @@ fn ident_str<'a>() -> impl Parser<'a, &'a str, String, Err<'a>> + Clone {
     text::ascii::ident().map(|s: &str| s.to_string()).padded()
 }
 
-// Parses one entry inside a bracket list: "user", "user:*", or "group#member"
+// Parses one entry inside a bracket list: "user" or "group#member"
 fn namespace_ref_parser<'a>() -> impl Parser<'a, &'a str, NamespaceRef, Err<'a>> + Clone {
     let base = text::ascii::ident().map(|s: &str| s.to_string());
 
-    let suffix = choice((
-        just('#')
-            .ignore_then(text::ascii::ident().map(|s: &str| s.to_string()))
-            .map(NamespaceRefKind::Userset),
-        just(':').ignore_then(just('*')).to(NamespaceRefKind::Wildcard),
-    ))
-    .or_not()
-    .map(|opt| opt.unwrap_or(NamespaceRefKind::Direct));
+    let suffix = just('#')
+        .ignore_then(text::ascii::ident().map(|s: &str| s.to_string()))
+        .map(NamespaceRefKind::Userset)
+        .or_not()
+        .map(|opt| opt.unwrap_or(NamespaceRefKind::Direct));
 
     base.then(suffix)
         .map(|(namespace, subject)| NamespaceRef { namespace, subject })
