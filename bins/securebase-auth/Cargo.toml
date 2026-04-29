@@ -6,3 +6,8 @@ edition.workspace = true
 [[bin]]
 name = "securebase-auth"
 path = "src/main.rs"
+
+[dependencies]
+auth-api = { workspace = true }
+tokio    = { workspace = true }
+anyhow   = { workspace = true }
