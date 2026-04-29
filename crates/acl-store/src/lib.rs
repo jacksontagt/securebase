@@ -1,7 +1,7 @@
 use acl_engine::{StoreError, TupleStore};
 use acl_model::tuple::{ObjectRef, SubjectRef, Tuple};
 use async_trait::async_trait;
-use sqlx::{PgPool};
+use sqlx::PgPool;
 
 pub struct PostgresTupleStore {
     pool: PgPool,
