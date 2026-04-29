@@ -13,7 +13,6 @@ pub struct NamespaceRef {
 #[derive(Debug, Clone)]
 pub enum NamespaceRefKind {
     Direct,
-    Wildcard,
     Userset(String),
 }
 
@@ -139,10 +138,6 @@ mod tests {
             namespace: "user".into(),
             subject: NamespaceRefKind::Direct,
         };
-        let _wildcard = NamespaceRef {
-            namespace: "user".into(),
-            subject: NamespaceRefKind::Wildcard,
-        };
         let _userset = NamespaceRef {
             namespace: "group".into(),
             subject: NamespaceRefKind::Userset("member".into()),
@@ -204,18 +199,16 @@ mod tests {
 
     #[test]
     fn parse_namespace_restrictions_multiple() {
-        let schema = parse_schema(
-            "namespace group\n  relations\n    define member: [user, group#member, user:*]",
-        )
-        .unwrap();
+        let schema =
+            parse_schema("namespace group\n  relations\n    define member: [user, group#member]")
+                .unwrap();
         let rewrite = schema.get_rewrite("group", "member").unwrap();
         let Rewrite::This { allowed } = rewrite else {
             panic!("expected This")
         };
-        assert_eq!(allowed.len(), 3);
+        assert_eq!(allowed.len(), 2);
         assert!(matches!(allowed[0].subject, NamespaceRefKind::Direct));
         assert!(matches!(&allowed[1].subject, NamespaceRefKind::Userset(r) if r == "member"));
-        assert!(matches!(allowed[2].subject, NamespaceRefKind::Wildcard));
     }
 
     #[test]
