@@ -37,6 +37,26 @@ async fn main() {
         row.0, row.1, row.2, row.3, row.4, row.5
     );
 
+    // Read direct: who has viewer on document:readme?
+    let obj3 = ObjectRef::new("document", "readme").unwrap();
+    let subjects = store.read_direct(&obj3, "viewer").await.unwrap();
+    println!(
+        "\nread_direct(document:readme, viewer) → {} subject(s)",
+        subjects.len()
+    );
+    for s in &subjects {
+        println!("  {s:?}");
+    }
+
+    // Read reverse: what tuples reference user:alice as subject?
+    let subj_obj3 = ObjectRef::new("user", "alice").unwrap();
+    let subj3 = SubjectRef::user(subj_obj3, None).unwrap();
+    let tuples = store.read_reverse(&subj3).await.unwrap();
+    println!("\nread_reverse(user:alice) → {} tuple(s)", tuples.len());
+    for t in &tuples {
+        println!("  {t:?}");
+    }
+
     // Delete the tuple
     let obj2 = ObjectRef::new("document", "readme").unwrap();
     let subj_obj2 = ObjectRef::new("user", "alice").unwrap();
