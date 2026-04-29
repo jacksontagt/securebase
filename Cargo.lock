@@ -33,6 +33,7 @@ dependencies = [
  "acl-engine",
  "acl-model",
  "async-trait",
+ "dotenvy",
  "sqlx",
  "tokio",
 ]
