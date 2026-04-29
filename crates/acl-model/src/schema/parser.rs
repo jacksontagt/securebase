@@ -76,7 +76,9 @@ fn namespace_ref_parser<'a>() -> impl Parser<'a, &'a str, NamespaceRef, Err<'a>>
         just('#')
             .ignore_then(text::ascii::ident().map(|s: &str| s.to_string()))
             .map(NamespaceRefKind::Userset),
-        just(':').ignore_then(just('*')).to(NamespaceRefKind::Wildcard),
+        just(':')
+            .ignore_then(just('*'))
+            .to(NamespaceRefKind::Wildcard),
     ))
     .or_not()
     .map(|opt| opt.unwrap_or(NamespaceRefKind::Direct));
