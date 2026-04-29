@@ -25,7 +25,7 @@ fn validate_component(name: &'static str, s: &str) -> Result<(), ParseError> {
     Ok(())
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectRef {
     namespace: String,
     id: String,
@@ -55,7 +55,7 @@ impl fmt::Display for ObjectRef {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SubjectRef {
     User {
         object: ObjectRef,
@@ -81,13 +81,19 @@ impl fmt::Display for SubjectRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Wildcard => write!(f, "*"),
-            Self::User { object, relation: None } => write!(f, "{object}"),
-            Self::User { object, relation: Some(r) } => write!(f, "{object}#{r}"),
+            Self::User {
+                object,
+                relation: None,
+            } => write!(f, "{object}"),
+            Self::User {
+                object,
+                relation: Some(r),
+            } => write!(f, "{object}#{r}"),
         }
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Tuple {
     object: ObjectRef,
     relation: String,
@@ -102,7 +108,11 @@ impl Tuple {
     ) -> Result<Self, ParseError> {
         let relation = relation.into();
         validate_component("relation", &relation)?;
-        Ok(Self { object, relation, subject })
+        Ok(Self {
+            object,
+            relation,
+            subject,
+        })
     }
 
     pub fn object(&self) -> &ObjectRef {
@@ -137,7 +147,9 @@ impl FromStr for Tuple {
         // Split left on last '#' to isolate the relation.
         // Using rfind so that object ids containing '#' (not valid per validation,
         // but defensive) don't confuse the split.
-        let hash = left.rfind('#').ok_or(ParseError::MissingRelationSeparator)?;
+        let hash = left
+            .rfind('#')
+            .ok_or(ParseError::MissingRelationSeparator)?;
         let object_str = &left[..hash];
         let relation = &left[hash + 1..];
 
@@ -179,12 +191,18 @@ mod tests {
 
     #[test]
     fn object_ref_empty_namespace() {
-        assert_eq!(ObjectRef::new("", "id"), Err(ParseError::EmptyComponent("namespace")));
+        assert_eq!(
+            ObjectRef::new("", "id"),
+            Err(ParseError::EmptyComponent("namespace"))
+        );
     }
 
     #[test]
     fn object_ref_empty_id() {
-        assert_eq!(ObjectRef::new("ns", ""), Err(ParseError::EmptyComponent("id")));
+        assert_eq!(
+            ObjectRef::new("ns", ""),
+            Err(ParseError::EmptyComponent("id"))
+        );
     }
 
     #[test]
@@ -300,7 +318,9 @@ mod tests {
     fn parse_missing_colon_in_object() {
         assert_eq!(
             "documentreadme#viewer@user:alice".parse::<Tuple>(),
-            Err(ParseError::MissingNamespaceSeparator("documentreadme".into()))
+            Err(ParseError::MissingNamespaceSeparator(
+                "documentreadme".into()
+            ))
         );
     }
 
@@ -324,7 +344,10 @@ mod tests {
     fn tuple_new_validates_relation() {
         let obj = ObjectRef::new("document", "readme").unwrap();
         let subj = SubjectRef::wildcard();
-        assert_eq!(Tuple::new(obj, "", subj), Err(ParseError::EmptyComponent("relation")));
+        assert_eq!(
+            Tuple::new(obj, "", subj),
+            Err(ParseError::EmptyComponent("relation"))
+        );
     }
 
     #[test]
@@ -333,7 +356,6 @@ mod tests {
         let a: Tuple = s.parse().unwrap();
         let b: Tuple = s.parse().unwrap();
         assert_eq!(a, b);
-
     }
 
     #[test]

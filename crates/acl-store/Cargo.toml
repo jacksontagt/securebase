@@ -9,5 +9,7 @@ acl-model   = { workspace = true }
 sqlx        = { workspace = true }
 async-trait = { workspace = true }
 
-[dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[dev-dependencies]
+dotenvy = { workspace = true }

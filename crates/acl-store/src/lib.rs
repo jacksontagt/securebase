@@ -31,10 +31,15 @@ fn row_to_subject(ns: &str, id: &str, rel: &str) -> Result<SubjectRef, StoreErro
         return Ok(SubjectRef::Wildcard);
     }
     let obj = ObjectRef::new(ns, id).map_err(|e| StoreError::CorruptData(e.to_string()))?;
-    let relation = if rel.is_empty() { None } else { Some(rel.to_string()) };
+    let relation = if rel.is_empty() {
+        None
+    } else {
+        Some(rel.to_string())
+    };
     SubjectRef::user(obj, relation).map_err(|e| StoreError::CorruptData(e.to_string()))
 }
 
+#[allow(dead_code)]
 fn row_to_tuple(
     obj_ns: &str,
     obj_id: &str,
@@ -164,7 +169,12 @@ mod tests {
     async fn write_inserts_row(pool: PgPool) {
         let store = PostgresTupleStore::new(pool.clone());
         store
-            .write(vec![direct_tuple("document", "readme", "viewer", "user", "alice")], vec![])
+            .write(
+                vec![direct_tuple(
+                    "document", "readme", "viewer", "user", "alice",
+                )],
+                vec![],
+            )
             .await
             .unwrap();
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM acl.tuples")
@@ -178,11 +188,21 @@ mod tests {
     async fn write_duplicate_is_idempotent(pool: PgPool) {
         let store = PostgresTupleStore::new(pool.clone());
         store
-            .write(vec![direct_tuple("document", "readme", "viewer", "user", "alice")], vec![])
+            .write(
+                vec![direct_tuple(
+                    "document", "readme", "viewer", "user", "alice",
+                )],
+                vec![],
+            )
             .await
             .unwrap();
         store
-            .write(vec![direct_tuple("document", "readme", "viewer", "user", "alice")], vec![])
+            .write(
+                vec![direct_tuple(
+                    "document", "readme", "viewer", "user", "alice",
+                )],
+                vec![],
+            )
             .await
             .unwrap();
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM acl.tuples")
@@ -196,11 +216,21 @@ mod tests {
     async fn delete_removes_row(pool: PgPool) {
         let store = PostgresTupleStore::new(pool.clone());
         store
-            .write(vec![direct_tuple("document", "readme", "viewer", "user", "alice")], vec![])
+            .write(
+                vec![direct_tuple(
+                    "document", "readme", "viewer", "user", "alice",
+                )],
+                vec![],
+            )
             .await
             .unwrap();
         store
-            .write(vec![], vec![direct_tuple("document", "readme", "viewer", "user", "alice")])
+            .write(
+                vec![],
+                vec![direct_tuple(
+                    "document", "readme", "viewer", "user", "alice",
+                )],
+            )
             .await
             .unwrap();
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM acl.tuples")
@@ -214,7 +244,12 @@ mod tests {
     async fn delete_nonexistent_is_idempotent(pool: PgPool) {
         let store = PostgresTupleStore::new(pool);
         store
-            .write(vec![], vec![direct_tuple("document", "readme", "viewer", "user", "alice")])
+            .write(
+                vec![],
+                vec![direct_tuple(
+                    "document", "readme", "viewer", "user", "alice",
+                )],
+            )
             .await
             .unwrap();
     }
@@ -224,8 +259,12 @@ mod tests {
         let store = PostgresTupleStore::new(pool.clone());
         store
             .write(
-                vec![direct_tuple("document", "readme", "viewer", "user", "alice")],
-                vec![direct_tuple("document", "readme", "viewer", "user", "alice")],
+                vec![direct_tuple(
+                    "document", "readme", "viewer", "user", "alice",
+                )],
+                vec![direct_tuple(
+                    "document", "readme", "viewer", "user", "alice",
+                )],
             )
             .await
             .unwrap();

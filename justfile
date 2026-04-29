@@ -16,6 +16,12 @@ destroy:
 logs service="":
     docker compose logs -f {{service}}
 
+migrate:
+    sqlx migrate run --source migrations/acl --database-url "$DATABASE_URL"
+    sqlx migrate run --source migrations/app --database-url "$DATABASE_URL"
+
+setup: up migrate
+
 fmt:
     cargo fmt --all
 
