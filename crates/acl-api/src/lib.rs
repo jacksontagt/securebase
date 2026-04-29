@@ -32,9 +32,9 @@ pub fn serve(config: Config) -> Result<Arc<Schema>, String> {
             .join("\n")
     })?;
     eprintln!(
-        "schema loaded from '{}': {} type(s)",
+        "schema loaded from '{}': {} namespace(s)",
         config.schema_path,
-        schema.type_count()
+        schema.namespace_count()
     );
     Ok(schema)
 }
@@ -62,12 +62,12 @@ mod tests {
     fn load_schema_from_file() {
         let schema = load_schema(&schema_fga_path()).expect("schema.fga should parse cleanly");
 
-        assert!(schema.has_type("user"));
-        assert!(schema.has_type("group"));
-        assert!(schema.has_type("folder"));
-        assert!(schema.has_type("document"));
-        assert!(schema.has_type("file"));
-        assert_eq!(schema.type_count(), 5);
+        assert!(schema.has_namespace("user"));
+        assert!(schema.has_namespace("group"));
+        assert!(schema.has_namespace("folder"));
+        assert!(schema.has_namespace("document"));
+        assert!(schema.has_namespace("file"));
+        assert_eq!(schema.namespace_count(), 5);
 
         // document#viewer is a Union with 3 members
         assert!(matches!(

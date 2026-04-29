@@ -5,13 +5,13 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
-pub struct TypeRef {
-    pub type_name: String,
-    pub subject: TypeRefKind,
+pub struct NamespaceRef {
+    pub namespace: String,
+    pub subject: NamespaceRefKind,
 }
 
 #[derive(Debug, Clone)]
-pub enum TypeRefKind {
+pub enum NamespaceRefKind {
     Direct,
     Wildcard,
     Userset(String),
@@ -19,7 +19,7 @@ pub enum TypeRefKind {
 
 #[derive(Debug, Clone)]
 pub enum Rewrite {
-    This { allowed: Vec<TypeRef> },
+    This { allowed: Vec<NamespaceRef> },
     ComputedUserset { relation: String },
     TupleToUserset { tupleset: String, computed: String },
     Union(Vec<Rewrite>),
@@ -28,35 +28,35 @@ pub enum Rewrite {
 }
 
 #[derive(Debug)]
-pub struct TypeDef {
+pub struct NamespaceDef {
     pub name: String,
     pub relations: HashMap<String, Rewrite>,
 }
 
 #[derive(Debug)]
 pub struct Schema {
-    types: HashMap<String, TypeDef>,
+    namespaces: HashMap<String, NamespaceDef>,
 }
 
 impl Schema {
-    pub(crate) fn new(types: HashMap<String, TypeDef>) -> Self {
-        Self { types }
+    pub(crate) fn new(namespaces: HashMap<String, NamespaceDef>) -> Self {
+        Self { namespaces }
     }
 
-    pub fn get_rewrite(&self, type_name: &str, relation: &str) -> Option<&Rewrite> {
-        self.types.get(type_name)?.relations.get(relation)
+    pub fn get_rewrite(&self, namespace: &str, relation: &str) -> Option<&Rewrite> {
+        self.namespaces.get(namespace)?.relations.get(relation)
     }
 
-    pub fn has_type(&self, type_name: &str) -> bool {
-        self.types.contains_key(type_name)
+    pub fn has_namespace(&self, namespace: &str) -> bool {
+        self.namespaces.contains_key(namespace)
     }
 
-    pub fn type_def(&self, type_name: &str) -> Option<&TypeDef> {
-        self.types.get(type_name)
+    pub fn namespace_def(&self, namespace: &str) -> Option<&NamespaceDef> {
+        self.namespaces.get(namespace)
     }
 
-    pub fn type_count(&self) -> usize {
-        self.types.len()
+    pub fn namespace_count(&self) -> usize {
+        self.namespaces.len()
     }
 }
 
@@ -67,7 +67,7 @@ pub enum SchemaError {
         span: Range<usize>,
     },
     UndefinedRelation {
-        type_name: String,
+        namespace: String,
         relation: String,
         referenced_from: String,
     },
@@ -78,25 +78,25 @@ pub fn parse_schema(input: &str) -> Result<Schema, Vec<SchemaError>> {
     if !parse_errors.is_empty() {
         return Err(parse_errors);
     }
-    let mut types = HashMap::new();
+    let mut namespaces = HashMap::new();
     for raw in output.unwrap_or_default() {
         let mut relations = HashMap::new();
         for (name, rewrite) in raw.relations {
             relations.insert(name, rewrite);
         }
-        types.insert(
+        namespaces.insert(
             raw.name.clone(),
-            TypeDef {
+            NamespaceDef {
                 name: raw.name,
                 relations,
             },
         );
     }
-    let validation_errors = validator::validate(&types);
+    let validation_errors = validator::validate(&namespaces);
     if !validation_errors.is_empty() {
         return Err(validation_errors);
     }
-    Ok(Schema::new(types))
+    Ok(Schema::new(namespaces))
 }
 
 #[cfg(test)]
@@ -134,18 +134,18 @@ mod tests {
     }
 
     #[test]
-    fn type_ref_kinds_construct() {
-        let _direct = TypeRef {
-            type_name: "user".into(),
-            subject: TypeRefKind::Direct,
+    fn namespace_ref_kinds_construct() {
+        let _direct = NamespaceRef {
+            namespace: "user".into(),
+            subject: NamespaceRefKind::Direct,
         };
-        let _wildcard = TypeRef {
-            type_name: "user".into(),
-            subject: TypeRefKind::Wildcard,
+        let _wildcard = NamespaceRef {
+            namespace: "user".into(),
+            subject: NamespaceRefKind::Wildcard,
         };
-        let _userset = TypeRef {
-            type_name: "group".into(),
-            subject: TypeRefKind::Userset("member".into()),
+        let _userset = NamespaceRef {
+            namespace: "group".into(),
+            subject: NamespaceRefKind::Userset("member".into()),
         };
     }
 
@@ -155,30 +155,30 @@ mod tests {
         relations.insert(
             "viewer".into(),
             Rewrite::This {
-                allowed: vec![TypeRef {
-                    type_name: "user".into(),
-                    subject: TypeRefKind::Direct,
+                allowed: vec![NamespaceRef {
+                    namespace: "user".into(),
+                    subject: NamespaceRefKind::Direct,
                 }],
             },
         );
-        let mut types = HashMap::new();
-        types.insert(
+        let mut namespaces = HashMap::new();
+        namespaces.insert(
             "doc".into(),
-            TypeDef {
+            NamespaceDef {
                 name: "doc".into(),
                 relations,
             },
         );
-        let schema = Schema::new(types);
+        let schema = Schema::new(namespaces);
 
         assert!(matches!(
             schema.get_rewrite("doc", "viewer"),
             Some(Rewrite::This { .. })
         ));
         assert!(schema.get_rewrite("doc", "nonexistent").is_none());
-        assert!(schema.get_rewrite("missing_type", "viewer").is_none());
-        assert!(schema.has_type("doc"));
-        assert!(!schema.has_type("missing_type"));
+        assert!(schema.get_rewrite("missing_namespace", "viewer").is_none());
+        assert!(schema.has_namespace("doc"));
+        assert!(!schema.has_namespace("missing_namespace"));
     }
 
     #[test]
@@ -187,15 +187,16 @@ mod tests {
     }
 
     #[test]
-    fn parse_leaf_type() {
-        let schema = parse_schema("type user").unwrap();
-        assert!(schema.has_type("user"));
+    fn parse_leaf_namespace() {
+        let schema = parse_schema("namespace user").unwrap();
+        assert!(schema.has_namespace("user"));
         assert!(schema.get_rewrite("user", "x").is_none());
     }
 
     #[test]
     fn parse_direct_relation() {
-        let schema = parse_schema("type doc\n  relations\n    define owner: [user]").unwrap();
+        let schema =
+            parse_schema("namespace doc\n  relations\n    define owner: [user]").unwrap();
         assert!(matches!(
             schema.get_rewrite("doc", "owner"),
             Some(Rewrite::This { .. })
@@ -203,9 +204,9 @@ mod tests {
     }
 
     #[test]
-    fn parse_type_restrictions_multiple() {
+    fn parse_namespace_restrictions_multiple() {
         let schema = parse_schema(
-            "type group\n  relations\n    define member: [user, group#member, user:*]",
+            "namespace group\n  relations\n    define member: [user, group#member, user:*]",
         )
         .unwrap();
         let rewrite = schema.get_rewrite("group", "member").unwrap();
@@ -213,15 +214,15 @@ mod tests {
             panic!("expected This")
         };
         assert_eq!(allowed.len(), 3);
-        assert!(matches!(allowed[0].subject, TypeRefKind::Direct));
-        assert!(matches!(&allowed[1].subject, TypeRefKind::Userset(r) if r == "member"));
-        assert!(matches!(allowed[2].subject, TypeRefKind::Wildcard));
+        assert!(matches!(allowed[0].subject, NamespaceRefKind::Direct));
+        assert!(matches!(&allowed[1].subject, NamespaceRefKind::Userset(r) if r == "member"));
+        assert!(matches!(allowed[2].subject, NamespaceRefKind::Wildcard));
     }
 
     #[test]
     fn parse_computed_userset() {
         let schema = parse_schema(
-            "type doc\n  relations\n    define editor: [user]\n    define viewer: editor",
+            "namespace doc\n  relations\n    define editor: [user]\n    define viewer: editor",
         )
         .unwrap();
         assert!(matches!(
@@ -233,7 +234,7 @@ mod tests {
     #[test]
     fn parse_tuple_to_userset() {
         let schema = parse_schema(
-            "type doc\n  relations\n    define parent: [folder]\n    define viewer: viewer from parent",
+            "namespace doc\n  relations\n    define parent: [folder]\n    define viewer: viewer from parent",
         )
         .unwrap();
         assert!(matches!(
@@ -244,16 +245,17 @@ mod tests {
     }
 
     #[test]
-    fn parse_multiple_types() {
+    fn parse_multiple_namespaces() {
         let schema =
-            parse_schema("type user\ntype group\n  relations\n    define member: [user]").unwrap();
-        assert!(schema.has_type("user"));
-        assert!(schema.has_type("group"));
+            parse_schema("namespace user\nnamespace group\n  relations\n    define member: [user]")
+                .unwrap();
+        assert!(schema.has_namespace("user"));
+        assert!(schema.has_namespace("group"));
     }
 
     #[test]
     fn parse_syntax_error_returns_err() {
-        let result = parse_schema("define :"); // missing type block
+        let result = parse_schema("define :"); // missing namespace block
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert!(!errs.is_empty());
@@ -263,7 +265,7 @@ mod tests {
     #[test]
     fn parse_union_two() {
         let schema = parse_schema(
-            "type doc\n  relations\n    define editor: [user]\n    define viewer: [user] or editor",
+            "namespace doc\n  relations\n    define editor: [user]\n    define viewer: [user] or editor",
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
@@ -278,7 +280,7 @@ mod tests {
     #[test]
     fn parse_union_flattened() {
         let schema = parse_schema(
-            "type doc\n  relations\n    define parent: [folder]\n    define editor: [user]\n    define viewer: [user] or editor or viewer from parent",
+            "namespace doc\n  relations\n    define parent: [folder]\n    define editor: [user]\n    define viewer: [user] or editor or viewer from parent",
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
@@ -296,7 +298,7 @@ mod tests {
     #[test]
     fn parse_intersection() {
         let schema = parse_schema(
-            "type doc\n  relations\n    define member: [user]\n    define viewer: [user] and member",
+            "namespace doc\n  relations\n    define member: [user]\n    define viewer: [user] and member",
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
@@ -309,7 +311,7 @@ mod tests {
     #[test]
     fn parse_exclusion() {
         let schema = parse_schema(
-            "type doc\n  relations\n    define blocked: [user]\n    define viewer: [user] but not blocked",
+            "namespace doc\n  relations\n    define blocked: [user]\n    define viewer: [user] but not blocked",
         )
         .unwrap();
         assert!(matches!(
@@ -321,7 +323,7 @@ mod tests {
     #[test]
     fn parse_parentheses_grouping() {
         let schema = parse_schema(
-            "type doc\n  relations\n    define editor: [user]\n    define member: [user]\n    define viewer: ([user] or editor) and member",
+            "namespace doc\n  relations\n    define editor: [user]\n    define member: [user]\n    define viewer: ([user] or editor) and member",
         )
         .unwrap();
         let r = schema.get_rewrite("doc", "viewer").unwrap();
@@ -336,19 +338,19 @@ mod tests {
     #[test]
     fn parse_full_demo_schema() {
         let schema_text = "\
-type user
+namespace user
 
-type group
+namespace group
   relations
     define member: [user, group#member]
 
-type folder
+namespace folder
   relations
     define owner: [user]
     define editor: [user] or owner
     define viewer: [user] or editor
 
-type document
+namespace document
   relations
     define parent: [folder]
     define owner: [user]
@@ -357,10 +359,10 @@ type document
 ";
         let schema = parse_schema(schema_text).unwrap();
 
-        assert!(schema.has_type("user"));
-        assert!(schema.has_type("group"));
-        assert!(schema.has_type("folder"));
-        assert!(schema.has_type("document"));
+        assert!(schema.has_namespace("user"));
+        assert!(schema.has_namespace("group"));
+        assert!(schema.has_namespace("folder"));
+        assert!(schema.has_namespace("document"));
 
         let viewer = schema.get_rewrite("document", "viewer").unwrap();
         let Rewrite::Union(v) = viewer else {
@@ -389,26 +391,28 @@ type document
 
     #[test]
     fn validate_undefined_computed_userset() {
-        let result = parse_schema("type doc\n  relations\n    define viewer: nonexistent");
+        let result =
+            parse_schema("namespace doc\n  relations\n    define viewer: nonexistent");
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert_eq!(errs.len(), 1);
         let SchemaError::UndefinedRelation {
-            type_name,
+            namespace,
             relation,
             referenced_from,
         } = &errs[0]
         else {
             panic!("expected UndefinedRelation")
         };
-        assert_eq!(type_name, "doc");
+        assert_eq!(namespace, "doc");
         assert_eq!(relation, "nonexistent");
         assert_eq!(referenced_from, "viewer");
     }
 
     #[test]
     fn validate_undefined_tupleset() {
-        let result = parse_schema("type doc\n  relations\n    define viewer: viewer from ghost");
+        let result =
+            parse_schema("namespace doc\n  relations\n    define viewer: viewer from ghost");
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert!(errs.iter().any(|e| matches!(e,
@@ -419,7 +423,7 @@ type document
     #[test]
     fn validate_undefined_ttu_computed() {
         let result = parse_schema(
-            "type doc\n  relations\n    define parent: [folder]\n    define viewer: missing from parent",
+            "namespace doc\n  relations\n    define parent: [folder]\n    define viewer: missing from parent",
         );
         assert!(result.is_err());
         let errs = result.unwrap_err();
@@ -430,15 +434,17 @@ type document
 
     #[test]
     fn validate_accumulates_multiple_errors() {
-        let result =
-            parse_schema("type doc\n  relations\n    define a: ghost1\n    define b: ghost2");
+        let result = parse_schema(
+            "namespace doc\n  relations\n    define a: ghost1\n    define b: ghost2",
+        );
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().len(), 2);
     }
 
     #[test]
     fn validate_undefined_inside_union() {
-        let result = parse_schema("type doc\n  relations\n    define viewer: [user] or ghost");
+        let result =
+            parse_schema("namespace doc\n  relations\n    define viewer: [user] or ghost");
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert!(errs.iter().any(|e| matches!(e,
@@ -449,7 +455,7 @@ type document
     #[test]
     fn validate_valid_schema_passes() {
         let result = parse_schema(
-            "type doc\n  relations\n    define owner: [user]\n    define viewer: owner",
+            "namespace doc\n  relations\n    define owner: [user]\n    define viewer: owner",
         );
         assert!(result.is_ok());
     }
@@ -457,19 +463,19 @@ type document
     #[test]
     fn validate_full_demo_schema_passes() {
         let schema_text = "\
-type user
+namespace user
 
-type group
+namespace group
   relations
     define member: [user, group#member]
 
-type folder
+namespace folder
   relations
     define owner: [user]
     define editor: [user] or owner
     define viewer: [user] or editor
 
-type document
+namespace document
   relations
     define parent: [folder]
     define owner: [user]

@@ -1,14 +1,14 @@
-use super::{Rewrite, SchemaError, TypeRef, TypeRefKind};
+use super::{NamespaceRef, NamespaceRefKind, Rewrite, SchemaError};
 use chumsky::prelude::*;
 
-pub(super) struct RawTypeDef {
+pub(super) struct RawNamespaceDef {
     pub name: String,
     pub relations: Vec<(String, Rewrite)>,
 }
 
 type Err<'a> = extra::Err<Rich<'a, char>>;
 
-pub(super) fn parse(input: &str) -> (Option<Vec<RawTypeDef>>, Vec<SchemaError>) {
+pub(super) fn parse(input: &str) -> (Option<Vec<RawNamespaceDef>>, Vec<SchemaError>) {
     let (output, errors) = schema_parser().parse(input).into_output_errors();
     let schema_errors = errors
         .into_iter()
@@ -69,29 +69,29 @@ fn ident_str<'a>() -> impl Parser<'a, &'a str, String, Err<'a>> + Clone {
 }
 
 // Parses one entry inside a bracket list: "user", "user:*", or "group#member"
-fn type_ref_parser<'a>() -> impl Parser<'a, &'a str, TypeRef, Err<'a>> + Clone {
+fn namespace_ref_parser<'a>() -> impl Parser<'a, &'a str, NamespaceRef, Err<'a>> + Clone {
     let base = text::ascii::ident().map(|s: &str| s.to_string());
 
     let suffix = choice((
         just('#')
             .ignore_then(text::ascii::ident().map(|s: &str| s.to_string()))
-            .map(TypeRefKind::Userset),
-        just(':').ignore_then(just('*')).to(TypeRefKind::Wildcard),
+            .map(NamespaceRefKind::Userset),
+        just(':').ignore_then(just('*')).to(NamespaceRefKind::Wildcard),
     ))
     .or_not()
-    .map(|opt| opt.unwrap_or(TypeRefKind::Direct));
+    .map(|opt| opt.unwrap_or(NamespaceRefKind::Direct));
 
     base.then(suffix)
-        .map(|(type_name, subject)| TypeRef { type_name, subject })
+        .map(|(namespace, subject)| NamespaceRef { namespace, subject })
         .padded()
 }
 
 // Parses "[user]", "[user, group#member]"
-fn type_restriction_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> + Clone {
+fn namespace_restriction_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> + Clone {
     just('[')
         .padded()
         .ignore_then(
-            type_ref_parser()
+            namespace_ref_parser()
                 .separated_by(just(',').padded())
                 .at_least(1)
                 .collect::<Vec<_>>(),
@@ -104,7 +104,7 @@ fn ident_rewrite_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> + Cl
     let reserved = |s: &str| {
         matches!(
             s,
-            "or" | "and" | "but" | "not" | "from" | "type" | "relations" | "define"
+            "or" | "and" | "but" | "not" | "from" | "namespace" | "relations" | "define"
         )
     };
 
@@ -131,7 +131,7 @@ fn ident_rewrite_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> + Cl
 fn rewrite_expr_parser<'a>() -> impl Parser<'a, &'a str, Rewrite, Err<'a>> {
     recursive(|expr| {
         let atom = choice((
-            type_restriction_parser(),
+            namespace_restriction_parser(),
             expr.clone()
                 .delimited_by(just('(').padded(), just(')').padded()),
             ident_rewrite_parser(),
@@ -163,7 +163,7 @@ fn relation_def_parser<'a>() -> impl Parser<'a, &'a str, (String, Rewrite), Err<
         .then(rewrite_expr_parser())
 }
 
-fn type_body_parser<'a>() -> impl Parser<'a, &'a str, Vec<(String, Rewrite)>, Err<'a>> {
+fn namespace_body_parser<'a>() -> impl Parser<'a, &'a str, Vec<(String, Rewrite)>, Err<'a>> {
     match_word("relations").ignore_then(
         relation_def_parser()
             .repeated()
@@ -172,18 +172,18 @@ fn type_body_parser<'a>() -> impl Parser<'a, &'a str, Vec<(String, Rewrite)>, Er
     )
 }
 
-fn type_def_parser<'a>() -> impl Parser<'a, &'a str, RawTypeDef, Err<'a>> {
-    match_word("type")
+fn namespace_def_parser<'a>() -> impl Parser<'a, &'a str, RawNamespaceDef, Err<'a>> {
+    match_word("namespace")
         .ignore_then(ident_str())
-        .then(type_body_parser().or_not())
-        .map(|(name, body)| RawTypeDef {
+        .then(namespace_body_parser().or_not())
+        .map(|(name, body)| RawNamespaceDef {
             name,
             relations: body.unwrap_or_default(),
         })
 }
 
-fn schema_parser<'a>() -> impl Parser<'a, &'a str, Vec<RawTypeDef>, Err<'a>> {
-    type_def_parser()
+fn schema_parser<'a>() -> impl Parser<'a, &'a str, Vec<RawNamespaceDef>, Err<'a>> {
+    namespace_def_parser()
         .repeated()
         .collect::<Vec<_>>()
         .padded()
