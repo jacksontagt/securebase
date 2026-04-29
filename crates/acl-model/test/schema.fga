@@ -1,0 +1,24 @@
+type user
+
+type group
+  relations
+    define member: [user, group#member]
+
+type folder
+  relations
+    define owner: [user]
+    define editor: [user] or owner
+    define viewer: [user] or editor
+
+type document
+  relations
+    define parent: [folder]
+    define owner: [user]
+    define editor: [user] or owner or editor from parent
+    define viewer: [user] or editor or viewer from parent
+
+type file
+  relations
+    define parent: [folder]
+    define owner: [user]
+    define viewer: [user] or owner or viewer from parent
