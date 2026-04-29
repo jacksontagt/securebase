@@ -68,11 +68,11 @@ pub async fn require_auth(
         .ok_or(AuthError::MissingHeader)?
         .to_str()
         .map_err(|_| AuthError::MalformedHeader)?;
-    
+
     let token = header_value
         .strip_prefix("Bearer ")
         .ok_or(AuthError::MalformedHeader)?;
-    
+
     let claims = verifier.verify(token)?;
     req.extensions_mut().insert(AuthClaims(claims));
 
@@ -122,10 +122,7 @@ mod tests {
 
         let verifier = AuthTokenVerifier::new(secret);
         let decoded = verifier.verify(&token).unwrap();
-        assert_eq!(
-            decoded.subject,
-            "11111111-2222-3333-4444-555555555555"
-        );
+        assert_eq!(decoded.subject, "11111111-2222-3333-4444-555555555555");
     }
 
     #[test]

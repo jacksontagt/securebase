@@ -47,24 +47,15 @@ struct GoTrueSession {
     expires_in: i64,
 }
 
-async fn signup(
-    State(state): State<GoTrueConfig>,
-    Json(req): Json<SignupRequest>,
-) -> Response {
+async fn signup(State(state): State<GoTrueConfig>, Json(req): Json<SignupRequest>) -> Response {
     forward_session(&state, "/signup", &req).await
 }
 
-async fn login(
-    State(state): State<GoTrueConfig>,
-    Json(req): Json<LoginRequest>,
-) -> Response {
+async fn login(State(state): State<GoTrueConfig>, Json(req): Json<LoginRequest>) -> Response {
     forward_session(&state, "/token?grant_type=password", &req).await
 }
 
-async fn refresh(
-    State(state): State<GoTrueConfig>,
-    Json(req): Json<RefreshRequest>,
-) -> Response {
+async fn refresh(State(state): State<GoTrueConfig>, Json(req): Json<RefreshRequest>) -> Response {
     forward_session(&state, "/token?grant_type=refresh_token", &req).await
 }
 
