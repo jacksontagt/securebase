@@ -279,7 +279,12 @@ mod tests {
     async fn read_direct_returns_subject(pool: PgPool) {
         let store = PostgresTupleStore::new(pool);
         store
-            .write(vec![direct_tuple("document", "readme", "viewer", "user", "alice")], vec![])
+            .write(
+                vec![direct_tuple(
+                    "document", "readme", "viewer", "user", "alice",
+                )],
+                vec![],
+            )
             .await
             .unwrap();
         let obj = ObjectRef::new("document", "readme").unwrap();
@@ -333,7 +338,12 @@ mod tests {
     async fn read_reverse_direct_user(pool: PgPool) {
         let store = PostgresTupleStore::new(pool);
         store
-            .write(vec![direct_tuple("document", "readme", "viewer", "user", "alice")], vec![])
+            .write(
+                vec![direct_tuple(
+                    "document", "readme", "viewer", "user", "alice",
+                )],
+                vec![],
+            )
             .await
             .unwrap();
         let subj = SubjectRef::user(ObjectRef::new("user", "alice").unwrap(), None).unwrap();
@@ -360,7 +370,10 @@ mod tests {
         .unwrap();
         let tuples = store.read_reverse(&query_subj).await.unwrap();
         assert_eq!(tuples.len(), 1);
-        assert_eq!(tuples[0].to_string(), "document:readme#viewer@group:eng#member");
+        assert_eq!(
+            tuples[0].to_string(),
+            "document:readme#viewer@group:eng#member"
+        );
     }
 
     #[sqlx::test(migrations = "../../migrations/acl")]
@@ -368,7 +381,10 @@ mod tests {
         let store = PostgresTupleStore::new(pool);
         // Write a direct-user tuple for group:eng (no relation)
         store
-            .write(vec![direct_tuple("document", "readme", "viewer", "group", "eng")], vec![])
+            .write(
+                vec![direct_tuple("document", "readme", "viewer", "group", "eng")],
+                vec![],
+            )
             .await
             .unwrap();
         // Query for userset group:eng#member — must NOT match the direct tuple

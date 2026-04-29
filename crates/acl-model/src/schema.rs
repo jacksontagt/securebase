@@ -195,8 +195,7 @@ mod tests {
 
     #[test]
     fn parse_direct_relation() {
-        let schema =
-            parse_schema("namespace doc\n  relations\n    define owner: [user]").unwrap();
+        let schema = parse_schema("namespace doc\n  relations\n    define owner: [user]").unwrap();
         assert!(matches!(
             schema.get_rewrite("doc", "owner"),
             Some(Rewrite::This { .. })
@@ -391,8 +390,7 @@ namespace document
 
     #[test]
     fn validate_undefined_computed_userset() {
-        let result =
-            parse_schema("namespace doc\n  relations\n    define viewer: nonexistent");
+        let result = parse_schema("namespace doc\n  relations\n    define viewer: nonexistent");
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert_eq!(errs.len(), 1);
@@ -434,17 +432,15 @@ namespace document
 
     #[test]
     fn validate_accumulates_multiple_errors() {
-        let result = parse_schema(
-            "namespace doc\n  relations\n    define a: ghost1\n    define b: ghost2",
-        );
+        let result =
+            parse_schema("namespace doc\n  relations\n    define a: ghost1\n    define b: ghost2");
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().len(), 2);
     }
 
     #[test]
     fn validate_undefined_inside_union() {
-        let result =
-            parse_schema("namespace doc\n  relations\n    define viewer: [user] or ghost");
+        let result = parse_schema("namespace doc\n  relations\n    define viewer: [user] or ghost");
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert!(errs.iter().any(|e| matches!(e,
