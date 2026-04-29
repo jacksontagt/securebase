@@ -25,6 +25,34 @@ fn subject_to_parts(s: &SubjectRef) -> (String, String, String) {
     }
 }
 
+type Cols = (
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+);
+
+fn tuples_to_cols(tuples: &[Tuple]) -> Cols {
+    let mut on = Vec::with_capacity(tuples.len());
+    let mut oi = Vec::with_capacity(tuples.len());
+    let mut r = Vec::with_capacity(tuples.len());
+    let mut sn = Vec::with_capacity(tuples.len());
+    let mut si = Vec::with_capacity(tuples.len());
+    let mut sr = Vec::with_capacity(tuples.len());
+    for t in tuples {
+        let (tsn, tsi, tsr) = subject_to_parts(t.subject());
+        on.push(t.object().namespace().to_string());
+        oi.push(t.object().id().to_string());
+        r.push(t.relation().to_string());
+        sn.push(tsn);
+        si.push(tsi);
+        sr.push(tsr);
+    }
+    (on, oi, r, sn, si, sr)
+}
+
 fn row_to_subject(ns: &str, id: &str, rel: &str) -> Result<SubjectRef, StoreError> {
     let obj = ObjectRef::new(ns, id).map_err(|e| StoreError::CorruptData(e.to_string()))?;
     let relation = if rel.is_empty() {
@@ -52,38 +80,39 @@ fn row_to_tuple(
 impl TupleStore for PostgresTupleStore {
     async fn write(&self, writes: Vec<Tuple>, deletes: Vec<Tuple>) -> Result<(), StoreError> {
         let mut tx = self.pool.begin().await.map_err(StoreError::backend)?;
-        for t in &writes {
-            let (sn, si, sr) = subject_to_parts(t.subject());
+        if !writes.is_empty() {
+            let (on, oi, r, sn, si, sr) = tuples_to_cols(&writes);
             sqlx::query(
                 "INSERT INTO acl.tuples
                     (object_namespace, object_id, relation,
                      subject_namespace, subject_id, subject_relation)
-                 VALUES ($1, $2, $3, $4, $5, $6)
+                 SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[])
                  ON CONFLICT DO NOTHING",
             )
-            .bind(t.object().namespace())
-            .bind(t.object().id())
-            .bind(t.relation())
-            .bind(&sn)
-            .bind(&si)
-            .bind(&sr)
+            .bind(on)
+            .bind(oi)
+            .bind(r)
+            .bind(sn)
+            .bind(si)
+            .bind(sr)
             .execute(&mut *tx)
             .await
             .map_err(StoreError::backend)?;
         }
-        for t in &deletes {
-            let (sn, si, sr) = subject_to_parts(t.subject());
+        if !deletes.is_empty() {
+            let (on, oi, r, sn, si, sr) = tuples_to_cols(&deletes);
             sqlx::query(
                 "DELETE FROM acl.tuples
-                 WHERE object_namespace=$1 AND object_id=$2 AND relation=$3
-                   AND subject_namespace=$4 AND subject_id=$5 AND subject_relation=$6",
+                 WHERE (object_namespace, object_id, relation,
+                        subject_namespace, subject_id, subject_relation)
+                 IN (SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[]))",
             )
-            .bind(t.object().namespace())
-            .bind(t.object().id())
-            .bind(t.relation())
-            .bind(&sn)
-            .bind(&si)
-            .bind(&sr)
+            .bind(on)
+            .bind(oi)
+            .bind(r)
+            .bind(sn)
+            .bind(si)
+            .bind(sr)
             .execute(&mut *tx)
             .await
             .map_err(StoreError::backend)?;
