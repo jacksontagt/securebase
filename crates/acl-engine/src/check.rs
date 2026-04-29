@@ -103,7 +103,6 @@ impl<'a, S: TupleStore> Checker<'a, S> {
         for parent in &parents {
             let parent_obj = match parent {
                 SubjectRef::User { object, .. } => object,
-                _ => continue,
             };
             if Box::pin(self.check(parent_obj, computed, subject)).await? {
                 return Ok(true);
