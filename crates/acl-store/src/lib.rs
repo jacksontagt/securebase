@@ -13,7 +13,8 @@ impl PostgresTupleStore {
     }
 }
 
-// Empty string for relation means no relation (direct user)
+// Maps a SubjectRef to the three DB columns
+// Empty string sentinel for subject_relation means "no relation" (direct user)
 // Wildcard is stored as namespace='*', id='*', relation=''
 fn subject_to_parts(s: &SubjectRef) -> (String, String, String) {
     match s {
@@ -39,7 +40,6 @@ fn row_to_subject(ns: &str, id: &str, rel: &str) -> Result<SubjectRef, StoreErro
     SubjectRef::user(obj, relation).map_err(|e| StoreError::CorruptData(e.to_string()))
 }
 
-#[allow(dead_code)]
 fn row_to_tuple(
     obj_ns: &str,
     obj_id: &str,
