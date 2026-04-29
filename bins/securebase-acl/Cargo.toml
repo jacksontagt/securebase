@@ -8,4 +8,6 @@ name = "securebase-acl"
 path = "src/main.rs"
 
 [dependencies]
-acl-api.workspace = true
+acl-api = { workspace = true }
+tokio   = { workspace = true }
+anyhow  = { workspace = true }
